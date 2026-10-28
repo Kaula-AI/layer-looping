@@ -1,0 +1,9 @@
+torch>=2.3
+transformers>=4.48
+datasets
+accelerate
+scikit-learn
+scipy
+matplotlib
+pytest
+sae-lens>=6   # only for sae_features.py

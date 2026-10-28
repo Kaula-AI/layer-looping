@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Per-Token Layer Looping</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one 16:10 manim-style canvas stage, transport controls under it, static storyboard below. Deliberately single dark look. */
+:root {
+  --bg: #0d0f12;
+  --panel: #15181d;
+  --line: #2a2f37;
+  --fg: #e8e6df;
+  --muted: #8d939c;
+  --blue: #58c4dd;
+  --yellow: #f7d96f;
+  --green: #83c167;
+  --red: #fc6255;
+  --teal: #5cd0b3;
+  --serif: "STIX Two Text", "Latin Modern Roman", "Cambria", Georgia, serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--serif);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 880px; margin: 0 auto; display: grid; gap: 18px; }
+header { display: grid; gap: 6px; }
+h1 { font-size: clamp(26px, 5vw, 38px); font-weight: 400; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 em { color: var(--yellow); }
+.sub { color: var(--muted); font-size: 17px; margin: 0; max-width: 62ch; }
+.stage { position: relative; width: 100%; aspect-ratio: 16 / 10; max-width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+button {
+  font-family: var(--mono); font-size: 13px; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 4px; padding: 7px 11px; cursor: pointer;
+}
+button:hover { border-color: var(--blue); }
+button:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+button[aria-pressed="true"] { border-color: var(--yellow); color: var(--yellow); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.bar > div { height: 100%; width: 0; background: var(--blue); }
+h2 { font-size: 13px; font-family: var(--mono); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 14px 0 0; }
+ol.board { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; counter-reset: sc; }
+ol.board li { display: grid; grid-template-columns: 2.2em 1fr; gap: 10px; align-items: baseline; counter-increment: sc; }
+ol.board li::before { content: counter(sc); font-family: var(--mono); color: var(--blue); font-size: 14px; }
+ol.board b { font-weight: 600; }
+ol.board p { margin: 2px 0 0; color: var(--muted); font-size: 16px; line-height: 1.5; max-width: 66ch; }
+.note { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Which layer, <em>how many times?</em></h1>
+    <p class="sub">Per-token layer looping in a frozen LLM, routed one token early from interpretable signals.</p>
+  </header>
+
+  <div class="stage"><canvas id="cv" aria-label="Animated explainer of per-token layer looping"></canvas></div>
+  <div class="bar"><div id="prog"></div></div>
+  <div class="controls">
+    <button id="prev" aria-label="Previous scene">◀</button>
+    <button id="play" aria-label="Play or pause">Pause</button>
+    <button id="next" aria-label="Next scene">▶</button>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <h2>Storyboard</h2>
+  <ol class="board">
+    <li><div><b>Fixed depth.</b><p>Standard decoding sends every token through every layer exactly once.</p></div></li>
+    <li><div><b>A second pass.</b><p>Repeating one layer ℓ k times for a single token can lower its next-token loss without touching the weights.</p></div></li>
+    <li><div><b>The oracle.</b><p>Brute-force every (ℓ, k) per token and record ΔNLL. Hard tokens such as numbers gain from middle-layer repeats; most tokens gain nothing.</p></div></li>
+    <li><div><b>Diagonal swap.</b><p>Only position t's own key and value change; every other position keeps its base-pass K/V. One config then costs about one forward pass.</p></div></li>
+    <li><div><b>Decide one token early.</b><p>A small router reads token t−1's logit-lens entropy, update norms and attention entropy, and fixes token t's route before its pass begins.</p></div></li>
+    <li><div><b>Accuracy vs compute.</b><p>Sweeping λ in −ΔNLL − λ·(extra layers) traces a Pareto frontier for the oracle, same-token router, t−1 routers and the best static config.</p></div></li>
+  </ol>
+  <p class="note">Curve shapes and heatmap values are illustrative, not results.</p>
+</div>
+
+<script>
+(() => {
+const C = { bg:"#000000", fg:"#e8e6df", muted:"#8d939c", line:"#2a2f37", blue:"#58c4dd", yellow:"#f7d96f", green:"#83c167", red:"#fc6255", teal:"#5cd0b3", grey:"#444a52" };
+const SERIF = '"STIX Two Text", Cambria, Georgia, serif';
+const MONO = '"IBM Plex Mono", Menlo, monospace';
+const W = 640, H = 400;
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+}
+
+// ---------- helpers (manim-ish "smooth" easing)
+const clamp = x => Math.max(0, Math.min(1, x));
+const sm = x => { x = clamp(x); const s = x * x * (3 - 2 * x); return s * s * (3 - 2 * s); };
+let T = 0, FADE = 1;
+const s = (a, b) => sm((T - a) / (b - a));
+const lerp = (a, b, p) => a + (b - a) * p;
+function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+
+function text(str, x, y, { size = 16, color = C.fg, a = 1, align = "center", font = SERIF, italic = false, write = 1 } = {}) {
+  if (a <= 0 || write <= 0) return;
+  const n = Math.ceil(str.length * clamp(write));
+  ctx.save(); ctx.globalAlpha = FADE * a; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle";
+  ctx.font = `${italic ? "italic " : ""}${size}px ${font}`;
+  if (n < str.length) {
+    const full = ctx.measureText(str).width;
+    const x0 = align === "center" ? x - full / 2 : align === "right" ? x - full : x;
+    ctx.textAlign = "left"; ctx.fillText(str.slice(0, n), x0, y);
+  } else ctx.fillText(str, x, y);
+  ctx.restore();
+}
+function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function arrow(x1, y1, x2, y2, color, p = 1, a = 1) {
+  if (p <= 0) return;
+  const x = lerp(x1, x2, p), y = lerp(y1, y2, p);
+  ctx.save(); ctx.globalAlpha = FADE * a; ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x, y); ctx.stroke();
+  const ang = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 9 * Math.cos(ang - 0.4), y - 9 * Math.sin(ang - 0.4));
+  ctx.lineTo(x - 9 * Math.cos(ang + 0.4), y - 9 * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function dot(x, y, color = C.yellow, r = 7) {
+  ctx.save(); ctx.globalAlpha = FADE; ctx.shadowColor = color; ctx.shadowBlur = 14; ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+function bez(p0, p1, p2, p3, t) {
+  const u = 1 - t;
+  return [u*u*u*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2[0] + t*t*t*p3[0], u*u*u*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2[1] + t*t*t*p3[1]];
+}
+
+// Layer stack: n layers, bottom layer index 0
+function stack({ cx, base, n = 8, w = 150, h = 22, gap = 8, appear = 1, glow = -1, glowColor = C.yellow, label = true, a = 1 }) {
+  const ys = [];
+  for (let i = 0; i < n; i++) {
+    const y = base - i * (h + gap);
+    ys.push(y);
+    const p = clamp(appear * n - i);
+    if (p <= 0) continue;
+    ctx.save(); ctx.globalAlpha = FADE * p * a;
+    rrect(cx - w / 2, y - h / 2, w, h, 4);
+    const lit = i === glow;
+    ctx.fillStyle = lit ? rgba(glowColor, 0.22) : rgba(C.blue, 0.10);
+    ctx.fill(); ctx.lineWidth = lit ? 2.5 : 1.5; ctx.strokeStyle = lit ? glowColor : C.blue; ctx.stroke();
+    ctx.restore();
+    if (label) text(`ℓ = ${i}`, cx - w / 2 - 12, y, { size: 13, font: MONO, color: C.muted, align: "right", a: p * a });
+  }
+  return ys;
+}
+
+// ---------- deterministic "oracle" values (illustrative)
+const TOKS = ["Natalia", "sold", "48", "clips", "in", "April", "and", "half", "as", "many"];
+const HARD = { 2: 1, 7: 1, 9: 0.8, 5: 0.35 };
+function dNLL(t, l) {
+  const noise = Math.sin(t * 12.9898 + l * 78.233) * 43758.5453; const r = noise - Math.floor(noise);
+  const bump = (HARD[t] || 0) * Math.exp(-((l - 4.2) ** 2) / 2.2);
+  return 0.06 * (r - 0.35) - 0.34 * bump + (l === 0 || l === 7 ? 0.08 : 0);
+}
+
+// ---------- scenes
+const scenes = [
+  { name: "Fixed depth", dur: 7, draw() {
+    text("Which layer, how many times?", W / 2, 34, { size: 26, write: s(0, 1.4) });
+    const ys = stack({ cx: W / 2, base: 330, appear: s(0.8, 2.4) });
+    text("embed", W / 2, 362, { size: 13, font: MONO, color: C.muted, a: s(1.6, 2.2) });
+    text("logits", W / 2, 84, { size: 13, font: MONO, color: C.muted, a: s(1.6, 2.2) });
+    const p = s(2.6, 5.2);
+    if (p > 0) {
+      const y = lerp(362, 104, p);
+      const g = ys.findIndex(v => Math.abs(v - y) < 12);
+      stack({ cx: W / 2, base: 330, glow: g, label: false });
+      dot(W / 2, y);
+    }
+    text("Standard decoding: every token, every layer, once.", W / 2, 386, { size: 15, color: C.muted, a: s(4.4, 5.4), italic: true });
+  }},
+  { name: "Second pass", dur: 8, draw() {
+    text("A second pass through one layer", W / 2, 34, { size: 24, write: s(0, 1.2) });
+    const ys = stack({ cx: W / 2, base: 330 });
+    const L4 = ys[4], top = L4 - 11, bot = L4 + 11;
+    const P0 = [W / 2 + 78, L4 - 4], P1 = [W / 2 + 175, L4 - 44], P2 = [W / 2 + 175, L4 + 44], P3 = [W / 2 + 78, L4 + 4];
+    // loop path drawing
+    const lp = s(1.2, 2.2);
+    if (lp > 0) {
+      ctx.save(); ctx.strokeStyle = C.yellow; ctx.lineWidth = 2; ctx.setLineDash([6, 5]); ctx.beginPath();
+      for (let i = 0; i <= 40 * lp; i++) { const q = bez(P0, P1, P2, P3, i / 40); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }
+      ctx.stroke(); ctx.restore();
+      text("k = 2", W / 2 + 195, L4, { size: 20, color: C.yellow, italic: true, a: lp });
+    }
+    // dot path
+    let x = W / 2, y = 362, g = -1;
+    const a1 = s(2.4, 3.8), a2 = s(3.8, 4.8), a3 = s(4.8, 5.4), a4 = s(5.4, 6.6);
+    if (a4 > 0) { y = lerp(top, 104, a4); }
+    else if (a3 > 0) { y = lerp(bot, top, a3); g = 4; }
+    else if (a2 > 0) { if (a2 < 0.2) { x = lerp(W / 2, P0[0], a2 / 0.2); y = lerp(top, P0[1], a2 / 0.2); } else if (a2 < 0.8) { [x, y] = bez(P0, P1, P2, P3, (a2 - 0.2) / 0.6); } else { x = lerp(P3[0], W / 2, (a2 - 0.8) / 0.2); y = lerp(P3[1], bot, (a2 - 0.8) / 0.2); } }
+    else { y = lerp(362, top, a1); if (y < bot && y > top) g = 4; }
+    if (a4 > 0) { const gi = ys.findIndex(v => Math.abs(v - y) < 12); g = gi; }
+    if (a1 > 0 && a4 < 1) { stack({ cx: W / 2, base: 330, glow: g, label: false }); dot(x, y); }
+    // math + NLL
+    text("h ← h + f₄(h)", 112, 160, { size: 19, italic: true, a: s(3.0, 3.6) });
+    text("h ← h + f₄(h)", 112, 188, { size: 19, italic: true, color: C.yellow, a: s(4.8, 5.4) });
+    const v = lerp(2.41, 2.18, s(6.4, 7.4));
+    text(`NLL  ${v.toFixed(2)}`, 112, 250, { size: 20, font: MONO, color: v < 2.4 ? C.green : C.fg, a: s(2.4, 3) });
+    text("same weights, more depth", 112, 276, { size: 14, color: C.muted, italic: true, a: s(6.6, 7.4) });
+  }},
+  { name: "Oracle", dur: 8.5, draw() {
+    text("Oracle: best (ℓ, k) for each token", W / 2, 30, { size: 22, write: s(0, 1.2) });
+    const x0 = 118, y0 = 92, cw = 47, ch = 28, nl = 8;
+    TOKS.forEach((tk, t) => text(tk, x0 + t * cw + cw / 2, y0 - 14, { size: 11, font: MONO, color: HARD[t] >= 0.8 ? C.yellow : C.fg, a: s(0.5, 1.2) }));
+    for (let l = 0; l < nl; l++) text(`ℓ${l}×2`, x0 - 10, y0 + (nl - 1 - l) * ch + ch / 2, { size: 11, font: MONO, color: C.muted, align: "right", a: s(0.5, 1.2) });
+    for (let t = 0; t < TOKS.length; t++) {
+      const p = s(1.0 + t * 0.28, 1.5 + t * 0.28);
+      if (p <= 0) continue;
+      let best = 0, bl = -1;
+      for (let l = 0; l < nl; l++) {
+        const d = dNLL(t, l); if (d < best) { best = d; bl = l; }
+        const inten = Math.min(1, Math.abs(d) / 0.3);
+        ctx.save(); ctx.globalAlpha = FADE * p;
+        ctx.fillStyle = d < 0 ? rgba(C.blue, 0.15 + 0.8 * inten) : rgba(C.red, 0.12 + 0.5 * inten);
+        ctx.fillRect(x0 + t * cw + 1, y0 + (nl - 1 - l) * ch + 1, cw - 2, ch - 2); ctx.restore();
+      }
+      const hp = s(4.6 + t * 0.1, 5.2 + t * 0.1);
+      if (hp > 0) {
+        if (best < -0.08) {
+          ctx.save(); ctx.globalAlpha = FADE * hp; ctx.strokeStyle = C.yellow; ctx.lineWidth = 2.5;
+          ctx.strokeRect(x0 + t * cw + 1, y0 + (nl - 1 - bl) * ch + 1, cw - 2, ch - 2); ctx.restore();
+        } else text("–", x0 + t * cw + cw / 2, y0 + nl * ch + 12, { size: 14, font: MONO, color: C.muted, a: hp });
+      }
+    }
+    const ly = y0 + nl * ch + 36;
+    ctx.save(); ctx.globalAlpha = FADE * s(3.6, 4.4);
+    ctx.fillStyle = rgba(C.blue, 0.9); ctx.fillRect(118, ly - 6, 14, 12);
+    ctx.fillStyle = rgba(C.red, 0.55); ctx.fillRect(300, ly - 6, 14, 12); ctx.restore();
+    text("repeat helps (ΔNLL < 0)", 138, ly, { size: 13, align: "left", a: s(3.6, 4.4) });
+    text("repeat hurts", 320, ly, { size: 13, align: "left", a: s(3.6, 4.4) });
+    text("– no repeat", 440, ly, { size: 13, align: "left", font: SERIF, a: s(5.4, 6) });
+    text("Numbers gain from middle-layer repeats; most tokens gain nothing.", W / 2, 386, { size: 15, italic: true, color: C.muted, a: s(6.4, 7.4) });
+  }},
+  { name: "Diagonal swap", dur: 8, draw() {
+    text("Diagonal swap", W / 2, 30, { size: 24, write: s(0, 1) });
+    const n = 8, c = 28, x0 = 60, y0 = 80;
+    text("keys →", x0 + n * c / 2, y0 - 14, { size: 13, font: MONO, color: C.muted, a: s(0.5, 1) });
+    for (let i = 0; i < n; i++) for (let j = 0; j <= i; j++) {
+      const p = s(0.6 + (i + j) * 0.06, 1.2 + (i + j) * 0.06);
+      const diag = i === j, dp = s(2.8 + i * 0.12, 3.3 + i * 0.12);
+      ctx.save(); ctx.globalAlpha = FADE * p;
+      ctx.fillStyle = diag && dp > 0 ? rgba(C.yellow, 0.25 + 0.65 * dp) : rgba(C.grey, 0.9);
+      ctx.fillRect(x0 + j * c + 2, y0 + i * c + 2, c - 4, c - 4); ctx.restore();
+    }
+    const rp = s(4.6, 5.4);
+    if (rp > 0) { ctx.save(); ctx.globalAlpha = FADE * rp; ctx.strokeStyle = C.blue; ctx.lineWidth = 2.5; ctx.strokeRect(x0, y0 + 5 * c, 6 * c, c); ctx.restore();
+      text("query t", x0 + 6 * c + 10, y0 + 5.5 * c, { size: 14, font: MONO, color: C.blue, align: "left", a: rp }); }
+    const tx = 330;
+    text("■ other positions keep base-pass K, V", tx, 110, { size: 15, align: "left", color: C.fg, a: s(1.6, 2.4) });
+    text("■ only t's own K, V change", tx, 140, { size: 15, align: "left", color: C.yellow, a: s(3.2, 4) });
+    text("one config ≈ one forward pass", tx, 196, { size: 18, align: "left", italic: true, a: s(5.4, 6.2) });
+    text("≈ 52 configs × 500k tokens", tx, 228, { size: 14, align: "left", font: MONO, color: C.muted, a: s(5.9, 6.6) });
+    text("≈ 1–2 h on one RTX 4090", tx, 252, { size: 14, align: "left", font: MONO, color: C.muted, a: s(6.1, 6.8) });
+    text("approximation: later tokens don't see t's change", W / 2, 386, { size: 14, italic: true, color: C.red, a: s(6.6, 7.4) });
+  }},
+  { name: "One token early", dur: 9, draw() {
+    text("Decide one token early", W / 2, 30, { size: 24, write: s(0, 1) });
+    const ysA = stack({ cx: 105, base: 300, w: 80, h: 16, gap: 8, label: false, appear: s(0.3, 1.3) });
+    text("token t−1", 105, 330, { size: 14, font: MONO, a: s(0.8, 1.4) });
+    const ent = [0.95, 0.9, 0.82, 0.74, 0.7, 0.42, 0.25, 0.12];
+    ysA.forEach((y, i) => { const p = s(1.4 + i * 0.12, 2.0 + i * 0.12);
+      if (p > 0) { ctx.save(); ctx.globalAlpha = FADE * p; ctx.fillStyle = C.teal; ctx.fillRect(152, y - 5, 50 * ent[i] * p, 10); ctx.restore(); } });
+    text("logit-lens entropy", 178, 108, { size: 12, font: MONO, color: C.teal, a: s(1.4, 2) });
+    arrow(214, 200, 250, 200, C.fg, s(2.6, 3.2));
+    ctx.save(); ctx.globalAlpha = FADE * s(2.9, 3.4); rrect(254, 172, 138, 56, 6); ctx.strokeStyle = C.yellow; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+    text("router", 323, 192, { size: 17, a: s(2.9, 3.4) });
+    text("ridge, ~1k params", 323, 213, { size: 11, font: MONO, color: C.muted, a: s(2.9, 3.4) });
+    text("route(t) = ℓ4 × 2", 323, 254, { size: 16, italic: true, color: C.yellow, a: s(3.8, 4.5) });
+    arrow(398, 200, 448, 200, C.fg, s(4.5, 5.1));
+    const ysB = stack({ cx: 535, base: 300, w: 80, h: 16, gap: 8, label: false, appear: s(4.6, 5.4), glow: T > 5.6 ? 4 : -1 });
+    text("token t", 535, 330, { size: 14, font: MONO, a: s(4.8, 5.4) });
+    const lp = s(5.8, 6.8);
+    if (lp > 0) { const y = ysB[4]; const P0 = [577, y - 6], P1 = [620, y - 34], P2 = [620, y + 34], P3 = [577, y + 6];
+      ctx.save(); ctx.strokeStyle = C.yellow; ctx.lineWidth = 2; ctx.beginPath();
+      for (let i = 0; i <= 30 * lp; i++) { const q = bez(P0, P1, P2, P3, i / 30); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }
+      ctx.stroke(); ctx.restore(); }
+    text("Route is known before token t's pass begins, so tokens can be batched by route.", W / 2, 376, { size: 14, italic: true, color: C.muted, a: s(7, 7.9) });
+  }},
+  { name: "Pareto", dur: 10, draw() {
+    text("maximize  −ΔNLL − λ · extra layers", W / 2, 30, { size: 21, italic: true, write: s(0, 1.4) });
+    const ox = 80, oy = 318, pw = 360, ph = 225;
+    const X = x => ox + x * pw, Y = y => oy - y * ph;
+    const ap = s(0.6, 1.4);
+    arrow(ox, oy, ox + pw + 16, oy, C.fg, ap); arrow(ox, oy, ox, oy - ph - 16, C.fg, ap);
+    [0, 0.5, 1].forEach(v => { text(v.toFixed(1), X(v), oy + 14, { size: 12, font: MONO, color: C.muted, a: ap }); });
+    text("extra layer applications per token", ox + pw / 2, oy + 34, { size: 13, color: C.muted, a: ap });
+    ctx.save(); ctx.globalAlpha = FADE * ap; ctx.translate(ox - 22, oy - ph / 2); ctx.rotate(-Math.PI / 2);
+    ctx.font = `13px ${SERIF}`; ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.fillText("NLL saved →", 0, 0); ctx.restore();
+    const curves = [
+      { n: "oracle", c: C.yellow, A: 0.95, k: 0.13 },
+      { n: "same-token router", c: C.blue, A: 0.72, k: 0.2 },
+      { n: "t−1 interp router", c: C.green, A: 0.62, k: 0.23 },
+      { n: "t−1 raw router", c: C.teal, A: 0.52, k: 0.24, dash: true },
+    ];
+    const f = (cv_, x) => cv_.A * (1 - Math.exp(-x / cv_.k));
+    curves.forEach((cv_, i) => {
+      const p = s(1.6 + i * 0.6, 3.0 + i * 0.6); if (p <= 0) return;
+      ctx.save(); ctx.strokeStyle = cv_.c; ctx.lineWidth = 2.5; if (cv_.dash) ctx.setLineDash([6, 5]); ctx.beginPath();
+      for (let j = 0; j <= 80 * p; j++) { const x = j / 80; j ? ctx.lineTo(X(x), Y(f(cv_, x))) : ctx.moveTo(X(x), Y(f(cv_, x))); }
+      ctx.stroke(); ctx.restore();
+      text(cv_.n, ox + pw + 14, Y(f(cv_, 1)) + (i === 3 ? 8 : 0), { size: 12, font: MONO, color: cv_.c, align: "left", a: p });
+    });
+    const sp = s(4.2, 5);
+    if (sp > 0) { ctx.save(); ctx.globalAlpha = FADE * sp; ctx.strokeStyle = C.red; ctx.lineWidth = 2; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(1), Y(0.17)); ctx.stroke(); ctx.restore(); dot(X(1), Y(0.17), C.red, 5);
+      text("best static", ox + pw + 14, Y(0.17), { size: 12, font: MONO, color: C.red, align: "left", a: sp }); }
+    const lp = s(5.6, 8.6);
+    if (lp > 0) { const g = curves[2]; const x = lerp(0.9, 0.08, lp); dot(X(x), Y(f(g, x)), C.green, 6);
+      text(`λ = ${lerp(0.02, 0.6, lp).toFixed(2)}`, X(0.62), Y(0.2), { size: 16, italic: true, color: C.green, align: "left" }); }
+    text("illustrative curve shapes, not results", W / 2, 388, { size: 11, font: MONO, color: C.muted, a: s(1, 1.6) });
+  }},
+];
+
+// ---------- transport
+const total = scenes.reduce((a, b) => a + b.dur, 0);
+const starts = []; scenes.reduce((a, b, i) => (starts[i] = a, a + b.dur), 0);
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let clock = 0, playing = !reduce, last = null;
+const chips = document.getElementById("chips");
+scenes.forEach((sc, i) => { const b = document.createElement("button"); b.id = "chip" + i; b.textContent = `${i + 1} ${sc.name}`;
+  b.addEventListener("click", () => { clock = starts[i] + (playing ? 0 : sc.dur - 0.45); last = null; frame(); }); chips.appendChild(b); });
+const playBtn = document.getElementById("play");
+function setPlay(v) { playing = v; playBtn.textContent = v ? "Pause" : "Play"; last = null; }
+setPlay(playing);
+playBtn.addEventListener("click", () => { setPlay(!playing); });
+const cur = () => { for (let i = scenes.length - 1; i >= 0; i--) if (clock >= starts[i]) return i; return 0; };
+document.getElementById("prev").addEventListener("click", () => { const i = (cur() + scenes.length - 1) % scenes.length; clock = starts[i] + (playing ? 0 : scenes[i].dur - 0.45); last = null; frame(); });
+document.getElementById("next").addEventListener("click", () => { const i = (cur() + 1) % scenes.length; clock = starts[i] + (playing ? 0 : scenes[i].dur - 0.45); last = null; frame(); });
+
+function frame() {
+  const i = cur(); T = clock - starts[i];
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = C.bg; ctx.fillRect(0, 0, cv.width, cv.height); ctx.restore();
+  // fade between scenes
+  const fadeIn = clamp(T / 0.4), fadeOut = clamp((scenes[i].dur - T) / 0.4);
+  FADE = playing ? Math.min(fadeIn, fadeOut, 1) : 1; ctx.save(); ctx.globalAlpha = FADE; scenes[i].draw(); ctx.restore(); FADE = 1;
+  text(`${i + 1}/${scenes.length}`, W - 14, H - 12, { size: 11, font: MONO, color: C.muted, align: "right" });
+  document.getElementById("prog").style.width = `${100 * clock / total}%`;
+  scenes.forEach((_, k) => document.getElementById("chip" + k).setAttribute("aria-pressed", k === i ? "true" : "false"));
+}
+function loop(ts) {
+  if (playing) { if (last != null) clock = (clock + Math.min(0.1, (ts - last) / 1000)) % total; last = ts; }
+  frame(); requestAnimationFrame(loop);
+}
+function start() {
+  resize();
+  if (reduce) clock = starts[0] + scenes[0].dur - 0.45;
+  requestAnimationFrame(loop);
+}
+window.addEventListener("resize", resize);
+(document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(start, start);
+})();
+</script>
+</body>
+</html>
