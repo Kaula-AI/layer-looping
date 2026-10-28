@@ -101,8 +101,68 @@ Routes use repeat and skip only; swaps are oracle-only.
 **Run.** `bash run_experiments.sh downstream` (`gsm8k_eval.py`): 250 test problems, 4-shot, greedy. Compares base, best static, and the t−1 router at λ ∈ {0, 0.05}. During generation the router reads the previous token's actual (routed) pass, a mild shift from its base-pass training features; report it.
 **Optional.** Fine-tune the router with REINFORCE or GRPO. Use reward = correct − λ·compute, with λ as a Lagrange multiplier for a target average compute. Warm-start from the ridge router.
 
-## Paper 2 (not now)
-Multi-edit programs: greedy or beam composition of single edits, then an RL router over programs. That's where the full skip/loop/reorder space lives.
+## Part 2: per-token layer paths and a cheap controller (E9–E12)
+Each token gets its own path through the frozen layers: repeats, skips, swaps, reversed blocks, looped blocks, in any combination. A small controller picks the path. The single-edit map (E1–E6) is the go/no-go for this part: if no single edit helps, longer paths rarely will.
+
+Run everything with `bash run_experiments.sh programs-quick` (20k tokens, about 1 h) or `programs` (100k tokens, about 4–6 h).
+
+**Grammar (`programs.py`).**
+| Edit | Cost |
+|---|---|
+| repeat ℓ×k | +k−1 |
+| skip | −1 |
+| swap adjacent | 0 |
+| reverse a block of 3–4 | 0 |
+| loop a block of 2–4 | +w |
+
+The first and last two layers are never edited, and path length stays within L−4 … L+6.
+
+### E9 Per-token path search (`search.py`)
+**Question.** How much more do multi-edit paths gain than the best single edit, per token?
+**Method.**
+- Round 1 scores every single edit of the base path.
+- Rounds 2–3 grow each token's own beam (width 3) with edits anchored on its 6 most promising layers.
+- Every candidate is scored exactly with the mixed-path executor (`G2.run_paths`).
+- For each token, the Pareto front over (cost, dNLL) is stored.
+
+**Metrics.**
+- Mean best dNLL from search vs the single-edit oracle (`controller_results.json → oracle_search` vs `oracle_single_edits`).
+- Which edit kinds appear in winning paths.
+- How often reversal or reordering helps.
+
+**Hypotheses.**
+- H4: multi-edit paths add meaningful gain over single edits.
+- H5: reversed and reordered blocks almost never win outside the middle layers.
+
+### E10 Program library (`library.py`)
+**Method.** The library holds the base path, every single edit, and the 128 multi-edit paths that win most often on **train** chunks. Each library path is scored exactly for every token. The output, `library.npz`, has the same format as `oracle.npz`, so `probe.py` and `analyze_tokens.py` run on it unchanged.
+**Metrics.** Library oracle vs search oracle, which shows how much a fixed library of a few hundred paths loses against per-token search.
+
+### E11 Cheap controller (`controller.py`)
+**Method.** A 2-layer MLP (256 hidden units) predicts every library path's dNLL from cheap signals. The route is the argmin of predicted dNLL + λ·cost, or no edit when nothing is below 0.
+- **Training loss:** MSE plus a decision-focused term (expected objective under a softmax over predictions). Every path is scored for every token, so this needs no sampling.
+- **Variants:**
+  - `mlp_lag`: from token t−1, decided before t's pass.
+  - `mlp_same`: from token t.
+
+**Baselines.**
+- Ridge over the library on interpretable and raw features.
+- Ridge restricted to single edits.
+- Best static path.
+- Library oracle, single-edit oracle and search oracle.
+
+**Pass.** At budget 0, `mlp_lag` beats the single-edit router and the best static path, with CIs excluding 0.
+**Kill.** It recovers under about 25% of the library oracle, or no more than single edits do.
+
+### E12 Whole-sequence routing (`program_eval.py`)
+**Question.** Do the gains survive when every token follows its chosen path at once?
+**Method.** Token-by-token decoding with a first-pass KV cache (`decode.step_path`). A layer the path never visits gets K/V projected from the state where the path first passes it, which reduces to the skip rule.
+**Metrics.** Routed dNLL vs the sum of independent deltas, for oracle and controller choices, at λ ∈ {0, 0.02}.
+**Kill.** The gap eats more than half of the predicted gain.
+
+### Follow-ups, if E11 works
+- **Steer as it goes:** a GRU controller reads the token's state after each layer and picks the next layer or stops. This is depth recurrence with a choice of cell.
+- **Task reward:** GSM8K accuracy minus λ·compute with GRPO, warm-started from the MLP.
 
 ---
 
@@ -118,6 +178,8 @@ Multi-edit programs: greedy or beam composition of single edits, then an RL rout
 | E8 | GSM8K generation × 4 configs | ~3 h | ~$2 |
 
 ## Paper mapping
+If Part 2 works, it becomes the headline: Fig 2 is the controller frontier against the oracles and baselines (E11), and the single-edit map becomes the motivating analysis.
+
 - Fig 1: method (diagonal swap, t−1 routing). Use the animation stills.
 - Fig 2: frontier (E2) with lag and interp variants (E3).
 - Table 1: headroom by op (E1) and the interaction gap (E5).

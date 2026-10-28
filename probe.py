@@ -47,11 +47,16 @@ else:  # older repeat-only files
     op = np.array(["repeat"] * len(d["cfgs"]))
     lay, kk = d["cfgs"][:, 0], d["cfgs"][:, 1]
     cost = (kk - 1).astype(np.float32)
-OPS = [o for o in ["repeat", "skip", "swap", "block"] if (op == o).any()]
+OPS = [o for o in dict.fromkeys(op.tolist()) if o != "base"]  # oracle.npz or library.npz
 end = d["cfg_end"] if "cfg_end" in d else lay
 
 
+cfg_name = d["cfg_name"].astype(str) if "cfg_name" in d else None
+
+
 def name(c):
+    if cfg_name is not None:
+        return cfg_name[c]
     if op[c] == "block":
         return f"block@{lay[c]}-{end[c]}x{kk[c]}"
     return f"{op[c]}@{lay[c]}" + (f"x{kk[c]}" if op[c] == "repeat" else "")
@@ -80,7 +85,8 @@ for o in OPS:
     h["by_op"][o] = {
         "oracle_gain_restricted": float(g_o.mean()),
         "frac_tokens_best_op": float(((op[arg] == o) & helped).mean()),
-        "winning_layer_hist": np.bincount(lay[arg[helped & (op[arg] == o)]], minlength=L).tolist(),
+        "winning_layer_hist": np.bincount(np.clip(lay[arg[helped & (op[arg] == o)]], 0, None), minlength=L).tolist()
+        if (lay[op == o] >= 0).all() else None,  # composite paths have no single anchor layer
         "best_static": name(np.where(m)[0][static[m].argmin()]),
     }
 if "skip" in OPS:
@@ -328,7 +334,7 @@ try:
     mk = {"repeat": "o", "skip": "v", "swap": "s", "block": "D"}
     for o in OPS:
         pts = [q for q, oo in zip(st, op) if oo == o]
-        ax.scatter([q["extra_layers"] for q in pts], [-q["dnll"] for q in pts], s=12, marker=mk[o],
+        ax.scatter([q["extra_layers"] for q in pts], [-q["dnll"] for q in pts], s=12, marker=mk.get(o, "."),
                    color="#de2d26", alpha=0.6, label=f"static {o}")
     ax.axhline(0, color="#888", lw=0.8)
     ax.axvline(0, color="#888", lw=0.8)

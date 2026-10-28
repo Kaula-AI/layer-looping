@@ -4,6 +4,8 @@
 #   bash run_experiments.sh full         # E1-E6 on 200k tokens (~2-3 h)
 #   bash run_experiments.sh sae          # E4 SAE latents + SAE routers (needs `full` first; pip install sae-lens)
 #   bash run_experiments.sh downstream   # E8 GSM8K at matched compute (needs `full` first; ~3-4 h)
+#   bash run_experiments.sh programs-quick  # E9-E12 per-token path search + controller on 20k tokens (~1 h)
+#   bash run_experiments.sh programs        # E9-E12 on 100k tokens (~4-6 h)
 set -euo pipefail
 MODE=${1:-quick}
 FULL=oracle_out_full
@@ -44,6 +46,25 @@ case "$MODE" in
     for LAM in 0 0.05; do
       python gsm8k_eval.py --policy router --lam $LAM --router $FULL/router_lag_interp.npz --out $FULL \
         | tee $FULL/gsm8k_router_lam$LAM.txt
+    done
+    ;;
+  programs|programs-quick)
+    if [ "$MODE" = "programs-quick" ]; then N=20000; OUT=programs_quick; else N=100000; OUT=programs_full; fi
+    mkdir -p "$OUT"
+    echo "== E0 correctness =="
+    python -m pytest -q tests
+    echo "== E9 per-token path search ($N tokens) =="
+    python search.py --n_tokens "$N" --out "$OUT" | tee "$OUT/search_log.txt"
+    echo "== E10 program library =="
+    python library.py --search "$OUT/search.npz" --n_tokens "$N" --out "$OUT" | tee "$OUT/library_log.txt"
+    python probe.py --path "$OUT/library.npz" --out_dir "$OUT" | tee "$OUT/probe_library_log.txt"
+    python analyze_tokens.py --path "$OUT/library.npz" --out_dir "$OUT" | tee "$OUT/token_library_log.txt"
+    echo "== E11 controller =="
+    python controller.py --library "$OUT/library.npz" --search "$OUT/search.npz" --out "$OUT" | tee "$OUT/controller_log.txt"
+    echo "== E12 whole-sequence routing =="
+    for LAM in 0 0.02; do
+      python program_eval.py --library "$OUT/library.npz" --controller "$OUT/controller.pt" --n_tokens "$N" \
+        --lam $LAM --n_chunks 8 --out "$OUT" | tee "$OUT/program_eval_lam$LAM.txt"
     done
     ;;
   *) echo "unknown mode $MODE"; exit 1;;

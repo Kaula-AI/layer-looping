@@ -12,6 +12,8 @@ A pretrained transformer sends every token through every layer once. This projec
    - attention entropy;
    - Gemma Scope SAE latents.
 
+**Part 2** takes this all the way. Each token gets its own path through the frozen layers: repeats, skips, swaps, reversed blocks and looped blocks, in any combination. Per-token search finds good paths, and a cheap controller learns to pick them. Think of it as depth recurrence where the model also chooses *which* layer to apply next.
+
 The model is `google/gemma-2-2b` and stays frozen; only small linear routers are trained. The headline result will be a compute–accuracy frontier: NLL saved against extra layer applications per token. Skips count as −1 layer, so they can pay for repeats.
 
 ## Method in one paragraph
@@ -26,6 +28,7 @@ bash run_experiments.sh quick         # E0-E4 on 20k tokens, ~15 min
 bash run_experiments.sh full          # E1-E6 on 200k tokens, ~2-3 h
 bash run_experiments.sh sae           # E4 SAE features (after full)
 bash run_experiments.sh downstream    # E8 GSM8K at matched compute (after full)
+bash run_experiments.sh programs-quick  # E9-E12 per-token paths + controller, 20k tokens (~1 h)
 ```
 See [`EXPERIMENTS.md`](EXPERIMENTS.md) for each experiment's question, hypothesis, metric and kill criterion.
 
@@ -39,6 +42,11 @@ See [`EXPERIMENTS.md`](EXPERIMENTS.md) for each experiment's question, hypothesi
 | `decode.py` | Token-by-token decoding with per-token programs and a first-pass KV cache |
 | `sae_features.py` | Gemma Scope SAE latents for every oracle position (via `sae_lens`) |
 | `gsm8k_eval.py` | GSM8K greedy generation under base / static / router policies |
+| `programs.py` | Edit grammar on layer paths (repeat, skip, swap, reverse, loop) |
+| `search.py` | Per-token beam search over paths, using the mixed-path executor `G2.run_paths` |
+| `library.py` | Shared path library, scored exactly for every token |
+| `controller.py` | Cheap MLP controller vs oracles and baselines |
+| `program_eval.py` | Whole-sequence routing with arbitrary per-token paths |
 | `manim_scenes.py`, `docs/explainer.html` | Animations for talks |
 | `tests/` | Correctness tests (all CPU) |
 | `CLAUDE.md` | Working brief for coding agents |

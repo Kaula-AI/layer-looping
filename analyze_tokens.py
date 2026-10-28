@@ -80,7 +80,7 @@ best = delta.min(1)
 arg = delta.argmin(1)
 gain = np.clip(-best, 0, None)
 helped = gain > a.thr
-OPS = [o for o in ["repeat", "skip", "swap", "block"] if (op == o).any()]
+OPS = [o for o in dict.fromkeys(op.tolist()) if o != "base"]  # oracle.npz or library.npz
 safe_skip = delta[:, op == "skip"].min(1) < a.skip_eps if "skip" in OPS else np.zeros(len(delta), bool)
 
 

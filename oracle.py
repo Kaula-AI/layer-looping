@@ -35,7 +35,7 @@ import torch
 import torch.nn.functional as F
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.models.gemma2.modeling_gemma2 import apply_rotary_pos_emb
+from transformers.models.gemma2.modeling_gemma2 import apply_rotary_pos_emb, rotate_half
 
 
 def get_args():
@@ -194,6 +194,69 @@ class G2:
             x, _, _ = self.layer(li, x, cos, sin, base_kv=kvs[li])
         return x
 
+    def layer_rows(self, li, x, b_idx, t_idx, cs, base_kv):
+        """Run layer li for a SUBSET of positions (rows) only. x: (n, d) states of those positions,
+        at (b_idx, t_idx). Each row attends to the base-pass K/V of layer li for every other position
+        of its own sequence (causal) and to its own current K/V on the diagonal. Returns (n, d)."""
+        layer = self.layers[li]
+        a = layer.self_attn
+        cos, sin = cs[0][b_idx, t_idx], cs[1][b_idx, t_idx]  # (n, hd)
+        n = x.shape[0]
+        h = layer.input_layernorm(x)
+        q = a.q_proj(h).view(n, self.nH, self.hd)
+        k = a.k_proj(h).view(n, self.nKV, self.hd)
+        v = a.v_proj(h).view(n, self.nKV, self.hd)
+        q = q * cos[:, None] + rotate_half(q) * sin[:, None]
+        k = k * cos[:, None] + rotate_half(k) * sin[:, None]
+        rep = self.nH // self.nKV
+        k, v = k.repeat_interleave(rep, 1), v.repeat_interleave(rep, 1)  # (n, H, hd)
+        K, V = base_kv  # (B, H, T, hd)
+        T = K.shape[2]
+        o = torch.empty(n, self.nH, self.hd, device=x.device, dtype=v.dtype)
+        for b in torch.unique(b_idx).tolist():  # group rows by sequence: no (n, H, T, hd) gather
+            r = (b_idx == b).nonzero(as_tuple=True)[0]
+            tr = t_idx[r]
+            ar = torch.arange(len(r), device=x.device)
+            s = torch.einsum("nhd,htd->nht", q[r], K[b]).float() * self.scale
+            s[ar, :, tr] = (q[r] * k[r]).sum(-1).float() * self.scale
+            if self.attn_cap:
+                s = torch.tanh(s / self.attn_cap) * self.attn_cap
+            s = s.masked_fill(torch.arange(T, device=x.device)[None, None, :] > tr[:, None, None], float("-inf"))
+            p = s.softmax(-1)
+            ob = torch.einsum("nht,htd->nhd", p.to(V.dtype), V[b])
+            o[r] = ob + p[ar, :, tr].to(v.dtype).unsqueeze(-1) * (v[r] - V[b][:, tr].transpose(0, 1))
+        o = o.reshape(n, -1)
+        h2 = x + layer.post_attention_layernorm(a.o_proj(o))
+        return h2 + layer.post_feedforward_layernorm(layer.mlp(layer.pre_feedforward_layernorm(h2)))
+
+    @torch.no_grad()
+    def run_paths(self, hs, kvs, cs, paths, chunk_rows=1024):
+        """Every position follows ITS OWN layer path. paths: LongTensor (B, T, S), padded with -1.
+        Positions start from the base state at the first step where their path leaves the base order.
+        Exact for each position's own next-token loss (diagonal swap). Returns final states (B, T, d)."""
+        B, T, S = paths.shape
+        L = len(self.layers)
+        dev = hs[0].device
+        base = torch.arange(S, device=dev).expand(B, T, S)
+        same = (paths == base) & (base < L)
+        d = torch.where(same.all(-1), torch.full((B, T), min(S, L), device=dev), (~same).float().argmax(-1))
+        d = torch.minimum(d, torch.full_like(d, L))
+        H = torch.stack(hs, 0)  # (L+1, B, T, dm)
+        bi = torch.arange(B, device=dev)[:, None].expand(B, T)
+        ti = torch.arange(T, device=dev)[None, :].expand(B, T)
+        x = H[d, bi, ti]  # (B, T, dm)
+        for st in range(S):
+            lid = paths[..., st]
+            active = (st >= d) & (lid >= 0)
+            if not active.any():
+                continue
+            for li in torch.unique(lid[active]).tolist():
+                rows = (active & (lid == li)).nonzero(as_tuple=False)
+                for r0 in range(0, len(rows), chunk_rows):
+                    rr = rows[r0 : r0 + chunk_rows]
+                    x[rr[:, 0], rr[:, 1]] = self.layer_rows(li, x[rr[:, 0], rr[:, 1]], rr[:, 0], rr[:, 1], cs, kvs[li])
+        return x
+
     def repeat_pass(self, hs, kvs, cs, l, k):
         L = len(self.layers)
         return self.run_program(hs, kvs, cs, list(range(l + 1)) + [l] * (k - 1) + list(range(l + 1, L)))
@@ -237,6 +300,29 @@ class G2:
             -1,
         )
         return ent, agree, upd
+
+
+@torch.no_grad()
+def base_records(g, ids, raw_layer):
+    """Base pass plus the per-position records every collection script saves (positions 0..T-2)."""
+    hs, kvs, attn_ent, cs = g.base_pass(ids)
+    base_nll = g.nll(hs[-1], ids)
+    ent, agree, upd = g.lens_features(hs)
+    feat = torch.cat([ent, agree, upd, attn_ent.float()], -1)[:, :-1]
+    raw = hs[raw_layer][:, :-1]
+    return hs, kvs, cs, base_nll, feat, raw
+
+
+@torch.no_grad()
+def lens_features_np(g, ids):
+    """Base-pass features for one sequence (B=1): numpy (T, 4L)."""
+    hs, _, attn_ent, _ = g.base_pass(ids)
+    ent, agree, upd = g.lens_features(hs)
+    return torch.cat([ent, agree, upd, attn_ent.float()], -1)[0].float().cpu().numpy()
+
+
+def feat_names(L):
+    return np.array([f"{g_}_{i}" for g_ in ["lens_ent", "lens_agree", "upd_norm", "attn_ent"] for i in range(L)])
 
 
 # ---------------------------------------------------------------- programs

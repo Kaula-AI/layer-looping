@@ -60,7 +60,10 @@ router found); (4) signed-cost frontier where skips pay for loops, against stati
 - Action space: single-edit **layer programs** per token (`oracle.build_programs`): repeat ℓ×k (k ∈ {2,3}),
   skip ℓ, swap ℓ/ℓ+1 — 103 programs — plus static block loop 10–13×2 (prior-work baseline). Signed cost: repeat k−1,
   skip −1, swap 0, block (e−s+1)(R−1) extra layer applications.
-  Multi-edit programs and an RL router over them are paper 2, not this paper.
+  **Part 2 (E9–E12):** full per-token paths over the frozen layer library: repeats, skips, swaps, reversed and
+  looped blocks, in any combination (`programs.py`), found by per-token beam search (`search.py`), distilled into
+  a shared library (`library.py`), and chosen by a cheap MLP controller (`controller.py`), with whole-sequence
+  evaluation (`program_eval.py`). Framing: depth recurrence with a choice of cell.
 - Hardware: one 24 GB GPU (RunPod RTX 4090). Do not debug on rented time longer than needed; run the tests,
   `--check` and the quick run first.
 
@@ -86,10 +89,18 @@ first pass; a skipped token's K/V at ℓ are still projected from its input) and
 - `decode.py` — token-by-token decoding with per-token programs and a first-pass KV cache.
 - `sae_features.py` — E4 Gemma Scope latents (layers 6/12/18, top-64) for every oracle position.
 - `gsm8k_eval.py` — E8 GSM8K greedy generation under base / static / router policies.
-- `manim_scenes.py`, `docs/explainer.html` — animations.
-- `tests/` — CPU tests on a tiny random Gemma-2 (`python -m pytest -q tests`, 7 tests): HF parity, swap identity,
-  oracle == independent recompute for repeat/skip/swap, routed single-token edit == oracle, token-by-token
-  decode == routed_forward for mixed routes, prefill+decode == routed_forward, decode features == base features.
+- `programs.py` — edit grammar on layer paths (repeat, skip, swap, reverse, loop), protected ends, length limits.
+- `search.py` — E9 per-token beam search; per-token Pareto fronts in `search.npz`.
+- `library.py` — E10 shared library (base + single edits + top train composites), scored exactly per token;
+  `library.npz` is oracle-format, so `probe.py` / `analyze_tokens.py` run on it.
+- `controller.py` — E11 cheap MLP controller (predict dNLL per path, argmin + λ·cost) vs oracles and baselines.
+- `program_eval.py` — E12 whole-sequence routing with arbitrary paths (token-by-token, first-pass KV).
+- `G2.run_paths` / `G2.layer_rows` — mixed-path executor: every position follows its own path in one pass.
+- `manim_scenes.py`, `docs/explainer.html` — animations. `docs/novelty-review.md` — literature review.
+- `tests/` — CPU tests on tiny random Gemma-2s (`python -m pytest -q tests`, 13 tests): HF parity, swap identity,
+  oracle == independent recompute for repeat/skip/swap/block, routed single-token edit == oracle, token-by-token
+  decode == routed_forward, prefill+decode, decode features == base features, mixed-path executor == independent
+  recompute for random paths, arbitrary-path decoding, search fronts exact and non-dominated, grammar.
 
 ## Status
 All code paths are written and pass the CPU tests. Nothing has run on Gemma-2-2B yet: there are no results.
@@ -104,15 +115,18 @@ Follow `EXPERIMENTS.md`. Concretely:
 3. **Full run.** `bash run_experiments.sh full` (E1–E6).
 4. **SAE (E4).** `bash run_experiments.sh sae`. Report the top latents with their Neuronpedia labels.
 5. **Robustness (E7).** Two of: domain transfer, split seeds, second model (needs a `G2` variant).
-6. **Downstream (E8).** `bash run_experiments.sh downstream`, only if E1–E5 pass the kill conditions.
-   Optional: REINFORCE/GRPO router on task reward − λ·compute, warm-started from the ridge router.
+6. **Paths (E9–E12).** `bash run_experiments.sh programs-quick`, then `programs`, if E1 shows headroom.
+   **Stop and report** after programs-quick: search vs single-edit oracle, library oracle, controller budget table.
+7. **Downstream (E8).** `bash run_experiments.sh downstream`, only if the kill conditions pass.
+   Optional: steer-as-it-goes GRU controller; GRPO on task reward − λ·compute, warm-started from the MLP.
 
 ## Kill conditions (stop or pivot to a negative-result paper)
 - E1: oracle per-token gain < ~2× the best static program's gain AND few tokens have a safe skip.
 - E3: lagged routers recover < ~25% of the same-token router's gain, or learned routers do not beat the
   training-free entropy / norm-peak baselines at matched compute.
 - Interp features add nothing over the raw hidden-state probe (then the paper is about lag only).
-- E5: the interaction gap eats > half of the predicted gain when routes are combined.
+- E5/E12: the interaction gap eats > half of the predicted gain when routes are combined.
+- E11: the controller recovers < ~25% of the library oracle, or no more than single edits.
 
 ## Conventions
 - Negative dNLL = the edit helps. Positions index the token being predicted from (position t predicts t+1).
@@ -122,4 +136,5 @@ Follow `EXPERIMENTS.md`. Concretely:
 - Keep changes to `G2` minimal and covered by `--check` and the tests.
 
 ## Budget
+- Paths: programs-quick (20k tokens) ~1 h; programs (100k) ~4–6 h on one 4090.
 - Full oracle (104 programs × 200k tokens): ~1–2 h on one 4090. Routed eval + downstream: a few hours. Expect < $10–20 total.

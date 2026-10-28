@@ -73,6 +73,52 @@ def step(g, cache, token, pos, route=(-1, 1), want_hs=False):
 
 
 @torch.no_grad()
+def step_path(g, cache, token, pos, path):
+    """Run one token (B,) through an ARBITRARY layer path (list of layer indices; repeats, skips,
+    swaps, reversed or looped blocks), updating the cache with first-pass semantics:
+      - the first visit to layer l writes K/V projected from the token's input to that visit;
+      - later visits attend to earlier tokens' cached K/V plus the token's own current K/V;
+      - a layer the path never visits gets K/V projected from the token's state at the point where
+        its path first reaches a layer with a higher index (or its final state), which reduces to
+        "projected from its input" for a plain skip.
+    Each layer receives exactly one cache entry per token, so cache order stays aligned."""
+    L = len(g.layers)
+    x = g.embed(token[:, None])
+    cos, sin = g.rotary(x, torch.full((x.shape[0], 1), pos, device=x.device, dtype=torch.long))
+    written = [False] * L
+    seen_inputs = []  # (layer, input state) for every step
+    pend = [None] * L  # this token's K/V per layer, appended at the end so earlier tokens see the cache unchanged
+    for li in path:
+        layer = g.layers[li]
+        seen_inputs.append((li, x))
+        q, k, v = g.qkv(layer, x, cos, sin)
+        if not written[li]:
+            written[li] = True
+            pend[li] = (k, v)
+        x, _ = _attend(g, li, x, q, k, v, cache.k[li], cache.v[li])
+    for li in range(L):
+        if not written[li]:
+            src = next((st for lj, st in seen_inputs if lj > li), x)
+            _, k, v = g.qkv(g.layers[li], src, cos, sin)
+            pend[li] = (k, v)
+        cache.append(li, *pend[li])
+    return x
+
+
+@torch.no_grad()
+def decode_nll_paths(g, ids, paths):
+    """Teacher-forced token-by-token pass where position t follows paths[t] (list of lists; batch
+    rows share paths). Returns per-position next-token NLL (B, T-1)."""
+    B, T = ids.shape
+    cache = Cache(len(g.layers))
+    out = []
+    for t in range(T - 1):
+        h = step_path(g, cache, ids[:, t], t, paths[t])
+        out.append(F.cross_entropy(g.logits(h[:, 0]), ids[:, t + 1], reduction="none"))
+    return torch.stack(out, 1)
+
+
+@torch.no_grad()
 def token_features(g, hs, attn_ent):
     """Same feature layout as oracle.py for ONE position: [lens_ent, lens_agree, upd_norm, attn_ent], each L."""
     L = len(g.layers)
