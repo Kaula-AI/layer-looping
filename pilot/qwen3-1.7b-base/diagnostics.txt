@@ -1,0 +1,7 @@
+# Diagnostics on oracle.npz (Qwen/Qwen3-1.7B-Base, 200175 rows), run on the pod after probe.py.
+# helped = min over programs of dNLL < -0.05 nats
+base NLL helped 3.039 vs not 0.017
+corr(base_nll, oracle gain) 0.758
+mean |delta| over programs, helped 1.236 not 1.016
+frac programs that help a given token: 0.346
+mean over tokens of mean-over-programs delta: 0.9968
