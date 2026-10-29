@@ -1,0 +1,173 @@
+/workspace/ll/analysis/oracle.py:41: DeprecationWarning: HookedTransformer.from_pretrained is deprecated and will be removed in a future major release. Use TransformerBridge.boot_transformers(...) instead, then call enable_compatibility_mode() for HookedTransformer-equivalent numerics. See docs/source/content/migrating_to_v3.md.
+  model = HookedTransformer.from_pretrained(a.model, device="cuda", dtype=getattr(torch, a.dtype))
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4638.09it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loaded pretrained model gpt2 into HookedTransformer
+gpt2: 12 layers, 47 programs
+  chunks 16/1961  3s
+  chunks 32/1961  5s
+  chunks 48/1961  8s
+  chunks 64/1961  10s
+  chunks 80/1961  13s
+  chunks 96/1961  16s
+  chunks 112/1961  18s
+  chunks 128/1961  21s
+  chunks 144/1961  23s
+  chunks 160/1961  26s
+  chunks 176/1961  28s
+  chunks 192/1961  31s
+  chunks 208/1961  34s
+  chunks 224/1961  36s
+  chunks 240/1961  39s
+  chunks 256/1961  41s
+  chunks 272/1961  44s
+  chunks 288/1961  46s
+  chunks 304/1961  49s
+  chunks 320/1961  52s
+  chunks 336/1961  54s
+  chunks 352/1961  57s
+  chunks 368/1961  59s
+  chunks 384/1961  62s
+  chunks 400/1961  64s
+  chunks 416/1961  67s
+  chunks 432/1961  70s
+  chunks 448/1961  72s
+  chunks 464/1961  75s
+  chunks 480/1961  77s
+  chunks 496/1961  80s
+  chunks 512/1961  82s
+  chunks 528/1961  85s
+  chunks 544/1961  88s
+  chunks 560/1961  90s
+  chunks 576/1961  93s
+  chunks 592/1961  95s
+  chunks 608/1961  98s
+  chunks 624/1961  100s
+  chunks 640/1961  103s
+  chunks 656/1961  106s
+  chunks 672/1961  108s
+  chunks 688/1961  111s
+  chunks 704/1961  113s
+  chunks 720/1961  116s
+  chunks 736/1961  118s
+  chunks 752/1961  121s
+  chunks 768/1961  124s
+  chunks 784/1961  126s
+  chunks 800/1961  129s
+  chunks 816/1961  131s
+  chunks 832/1961  134s
+  chunks 848/1961  137s
+  chunks 864/1961  139s
+  chunks 880/1961  142s
+  chunks 896/1961  144s
+  chunks 912/1961  147s
+  chunks 928/1961  149s
+  chunks 944/1961  152s
+  chunks 960/1961  155s
+  chunks 976/1961  157s
+  chunks 992/1961  160s
+  chunks 1008/1961  162s
+  chunks 1024/1961  165s
+  chunks 1040/1961  167s
+  chunks 1056/1961  170s
+  chunks 1072/1961  173s
+  chunks 1088/1961  175s
+  chunks 1104/1961  178s
+  chunks 1120/1961  180s
+  chunks 1136/1961  183s
+  chunks 1152/1961  186s
+  chunks 1168/1961  188s
+  chunks 1184/1961  191s
+  chunks 1200/1961  193s
+  chunks 1216/1961  196s
+  chunks 1232/1961  198s
+  chunks 1248/1961  201s
+  chunks 1264/1961  204s
+  chunks 1280/1961  206s
+  chunks 1296/1961  209s
+  chunks 1312/1961  211s
+  chunks 1328/1961  214s
+  chunks 1344/1961  216s
+  chunks 1360/1961  219s
+  chunks 1376/1961  222s
+  chunks 1392/1961  224s
+  chunks 1408/1961  227s
+  chunks 1424/1961  229s
+  chunks 1440/1961  232s
+  chunks 1456/1961  235s
+  chunks 1472/1961  237s
+  chunks 1488/1961  240s
+  chunks 1504/1961  242s
+  chunks 1520/1961  245s
+  chunks 1536/1961  247s
+  chunks 1552/1961  250s
+  chunks 1568/1961  253s
+  chunks 1584/1961  255s
+  chunks 1600/1961  258s
+  chunks 1616/1961  260s
+  chunks 1632/1961  263s
+  chunks 1648/1961  265s
+  chunks 1664/1961  268s
+  chunks 1680/1961  271s
+  chunks 1696/1961  273s
+  chunks 1712/1961  276s
+  chunks 1728/1961  278s
+  chunks 1744/1961  281s
+  chunks 1760/1961  284s
+  chunks 1776/1961  286s
+  chunks 1792/1961  289s
+  chunks 1808/1961  291s
+  chunks 1824/1961  294s
+  chunks 1840/1961  296s
+  chunks 1856/1961  299s
+  chunks 1872/1961  302s
+  chunks 1888/1961  304s
+  chunks 1904/1961  307s
+  chunks 1920/1961  309s
+  chunks 1936/1961  312s
+  chunks 1952/1961  315s
+  chunks 1961/1961  316s
+saved oracle_out/oracle.npz: 500055 rows x 47 programs in 317s
+/workspace/venv/lib/python3.12/site-packages/sklearn/linear_model/_ridge.py:227: LinAlgWarning: An ill-conditioned matrix detected: slice 0 has rcond = 5.440135097956045e-08.
+  return linalg.solve(A, Xy, assume_a="pos", overwrite_a=True).T
+== E1 Oracle headroom ==
+  positions: 500055
+  base_nll: 3.742428779602051
+  oracle_nll_reduction: 0.9302029013633728
+  oracle_pct_of_base: 24.855592727661133
+  frac_helped: 0.8990691023987362
+  best_static: {'program': 'repeat@1x2', 'mean_dnll': 0.0237643513828516}
+  frac_tokens_with_safe_skip: 0.9829798722140565
+  [repeat] gain if restricted: 0.7560  best-op share: 44.1%  best static: repeat@1x2
+  [skip] gain if restricted: 0.6796  best-op share: 34.4%  best static: skip@1
+  [swap] gain if restricted: 0.5384  best-op share: 11.4%  best static: swap@8
+
+== E2/E3 Routers on held-out chunks (lambda = 0) ==
+  oracle:      -0.9239
+  best static: +0.0287  (repeat@1x2, chosen on train)
+  features                     dNLL              95% CI    AUC  edit%  +layers  ops used
+  same_interp               +0.0243 [+0.0185,+0.0317]  0.196  47.3%   +0.256  repeat:56% skip:19% swap:25%
+  lag_interp                -0.0020 [-0.0038,-0.0003]  0.465  16.6%   +0.089  repeat:63% skip:15% swap:22%
+  lag_interp_surprisal      -0.0009 [-0.0031,+0.0009]  0.449  16.7%   +0.082  repeat:61% skip:17% swap:23%
+  same_raw                  -0.0011 [-0.0091,+0.0051]  0.284  91.7%   +0.454  repeat:55% skip:23% swap:22%
+  lag_raw                   -0.0003 [-0.0058,+0.0052]  0.434  86.2%   +0.334  repeat:53% skip:23% swap:24%
+
+== E2 Budget-matched dNLL (best frontier point with <= budget extra layers/token) ==
+                              -1.00    -0.50    +0.00    +0.25    +0.50
+  oracle                          —  -0.8525  -0.9109  -0.9219  -0.9239
+  same_interp               +0.0619  +0.0425  +0.0000  +0.0000  +0.0000
+  lag_interp                +0.0626  +0.0298  -0.0008  -0.0021  -0.0021
+  lag_interp_surprisal      +0.0620  +0.0262  -0.0007  -0.0013  -0.0013
+  same_raw                  +0.0320  +0.0140  +0.0000  -0.0012  -0.0020
+  lag_raw                   +0.0434  +0.0140  +0.0000  -0.0005  -0.0008
+
+  E3 lag recovery (t-1 interp / same-token interp at lambda=0): None
+
+== E4 Lagged interp feature groups (lambda = 0) ==
+  lens_ent                  -0.0006  +layers +0.010
+  lens_agree                +0.0006  +layers +0.006
+  upd_norm                  -0.0006  +layers +0.019
+  attn_ent                  -0.0014  +layers +0.044
+
+saved oracle_out/frontier.png and results.json
+PIPELINE_DONE

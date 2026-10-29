@@ -1,0 +1,248 @@
+Loading weights:   0%|          | 0/310 [00:00<?, ?it/s]Loading weights:   0%|          | 1/310 [00:00<02:35,  1.99it/s]Loading weights:  14%|█▎        | 42/310 [00:00<00:02, 91.98it/s]Loading weights:  21%|██▏       | 66/310 [00:00<00:02, 102.49it/s]Loading weights:  27%|██▋       | 85/310 [00:01<00:02, 100.66it/s]Loading weights:  33%|███▎      | 101/310 [00:01<00:02, 94.06it/s]Loading weights:  37%|███▋      | 114/310 [00:01<00:01, 98.28it/s]Loading weights:  42%|████▏     | 130/310 [00:01<00:01, 110.99it/s]Loading weights:  46%|████▋     | 144/310 [00:01<00:01, 97.98it/s] Loading weights:  51%|█████     | 157/310 [00:01<00:01, 103.55it/s]Loading weights:  55%|█████▍    | 169/310 [00:01<00:01, 88.06it/s] Loading weights:  58%|█████▊    | 180/310 [00:02<00:01, 92.60it/s]Loading weights:  62%|██████▏   | 191/310 [00:02<00:01, 96.40it/s]Loading weights:  65%|██████▌   | 202/310 [00:02<00:01, 99.52it/s]Loading weights:  69%|██████▊   | 213/310 [00:02<00:00, 101.28it/s]Loading weights:  72%|███████▏  | 224/310 [00:02<00:00, 103.64it/s]Loading weights:  76%|███████▌  | 235/310 [00:02<00:00, 84.01it/s] Loading weights:  79%|███████▉  | 245/310 [00:02<00:00, 87.13it/s]Loading weights:  82%|████████▏ | 255/310 [00:02<00:00, 90.38it/s]Loading weights:  86%|████████▋ | 268/310 [00:02<00:00, 100.86it/s]Loading weights:  90%|█████████ | 279/310 [00:03<00:00, 103.16it/s]Loading weights:  94%|█████████▍| 291/310 [00:03<00:00, 107.70it/s]Loading weights:  99%|█████████▉| 308/310 [00:03<00:00, 125.25it/s]Loading weights: 100%|██████████| 310/310 [00:03<00:00, 96.66it/s] 
+/workspace/ll/analysis/oracle.py:61: DeprecationWarning: HookedTransformer.from_pretrained is deprecated and will be removed in a future major release. Use TransformerBridge.boot_transformers(...) instead, then call enable_compatibility_mode() for HookedTransformer-equivalent numerics. See docs/source/content/migrating_to_v3.md.
+  model = HookedTransformer.from_pretrained(a.model, device="cuda", dtype=getattr(torch, a.dtype), **kw)
+WARNING:root:Loading model Qwen/Qwen3-1.7B requires setting trust_remote_code=True
+WARNING:root:Loading model Qwen/Qwen3-1.7B state dict requires setting trust_remote_code=True
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loaded pretrained model Qwen/Qwen3-1.7B into HookedTransformer
+Qwen/Qwen3-1.7B: 28 layers, 111 programs
+  chunks 4/785  12s
+  chunks 8/785  23s
+  chunks 12/785  34s
+  chunks 16/785  46s
+  chunks 20/785  57s
+  chunks 24/785  68s
+  chunks 28/785  80s
+  chunks 32/785  91s
+  chunks 36/785  103s
+  chunks 40/785  114s
+  chunks 44/785  125s
+  chunks 48/785  137s
+  chunks 52/785  148s
+  chunks 56/785  159s
+  chunks 60/785  171s
+  chunks 64/785  182s
+  chunks 68/785  194s
+  chunks 72/785  205s
+  chunks 76/785  216s
+  chunks 80/785  228s
+  chunks 84/785  239s
+  chunks 88/785  250s
+  chunks 92/785  262s
+  chunks 96/785  273s
+  chunks 100/785  285s
+  chunks 104/785  296s
+  chunks 108/785  307s
+  chunks 112/785  319s
+  chunks 116/785  330s
+  chunks 120/785  341s
+  chunks 124/785  353s
+  chunks 128/785  364s
+  chunks 132/785  376s
+  chunks 136/785  387s
+  chunks 140/785  398s
+  chunks 144/785  410s
+  chunks 148/785  421s
+  chunks 152/785  433s
+  chunks 156/785  444s
+  chunks 160/785  455s
+  chunks 164/785  467s
+  chunks 168/785  478s
+  chunks 172/785  489s
+  chunks 176/785  501s
+  chunks 180/785  512s
+  chunks 184/785  524s
+  chunks 188/785  535s
+  chunks 192/785  546s
+  chunks 196/785  558s
+  chunks 200/785  569s
+  chunks 204/785  580s
+  chunks 208/785  592s
+  chunks 212/785  603s
+  chunks 216/785  615s
+  chunks 220/785  626s
+  chunks 224/785  637s
+  chunks 228/785  649s
+  chunks 232/785  660s
+  chunks 236/785  671s
+  chunks 240/785  683s
+  chunks 244/785  694s
+  chunks 248/785  706s
+  chunks 252/785  717s
+  chunks 256/785  728s
+  chunks 260/785  740s
+  chunks 264/785  751s
+  chunks 268/785  762s
+  chunks 272/785  774s
+  chunks 276/785  785s
+  chunks 280/785  797s
+  chunks 284/785  808s
+  chunks 288/785  819s
+  chunks 292/785  831s
+  chunks 296/785  842s
+  chunks 300/785  853s
+  chunks 304/785  865s
+  chunks 308/785  876s
+  chunks 312/785  888s
+  chunks 316/785  899s
+  chunks 320/785  910s
+  chunks 324/785  922s
+  chunks 328/785  933s
+  chunks 332/785  944s
+  chunks 336/785  956s
+  chunks 340/785  967s
+  chunks 344/785  979s
+  chunks 348/785  990s
+  chunks 352/785  1001s
+  chunks 356/785  1013s
+  chunks 360/785  1024s
+  chunks 364/785  1036s
+  chunks 368/785  1047s
+  chunks 372/785  1058s
+  chunks 376/785  1070s
+  chunks 380/785  1081s
+  chunks 384/785  1092s
+  chunks 388/785  1104s
+  chunks 392/785  1115s
+  chunks 396/785  1127s
+  chunks 400/785  1138s
+  chunks 404/785  1149s
+  chunks 408/785  1161s
+  chunks 412/785  1172s
+  chunks 416/785  1183s
+  chunks 420/785  1195s
+  chunks 424/785  1206s
+  chunks 428/785  1218s
+  chunks 432/785  1229s
+  chunks 436/785  1240s
+  chunks 440/785  1252s
+  chunks 444/785  1263s
+  chunks 448/785  1274s
+  chunks 452/785  1286s
+  chunks 456/785  1297s
+  chunks 460/785  1309s
+  chunks 464/785  1320s
+  chunks 468/785  1331s
+  chunks 472/785  1343s
+  chunks 476/785  1354s
+  chunks 480/785  1365s
+  chunks 484/785  1377s
+  chunks 488/785  1388s
+  chunks 492/785  1400s
+  chunks 496/785  1411s
+  chunks 500/785  1422s
+  chunks 504/785  1434s
+  chunks 508/785  1445s
+  chunks 512/785  1456s
+  chunks 516/785  1468s
+  chunks 520/785  1479s
+  chunks 524/785  1491s
+  chunks 528/785  1502s
+  chunks 532/785  1513s
+  chunks 536/785  1525s
+  chunks 540/785  1536s
+  chunks 544/785  1547s
+  chunks 548/785  1559s
+  chunks 552/785  1570s
+  chunks 556/785  1582s
+  chunks 560/785  1593s
+  chunks 564/785  1604s
+  chunks 568/785  1616s
+  chunks 572/785  1627s
+  chunks 576/785  1638s
+  chunks 580/785  1650s
+  chunks 584/785  1661s
+  chunks 588/785  1673s
+  chunks 592/785  1684s
+  chunks 596/785  1695s
+  chunks 600/785  1707s
+  chunks 604/785  1718s
+  chunks 608/785  1729s
+  chunks 612/785  1741s
+  chunks 616/785  1752s
+  chunks 620/785  1764s
+  chunks 624/785  1775s
+  chunks 628/785  1786s
+  chunks 632/785  1798s
+  chunks 636/785  1809s
+  chunks 640/785  1820s
+  chunks 644/785  1832s
+  chunks 648/785  1843s
+  chunks 652/785  1855s
+  chunks 656/785  1866s
+  chunks 660/785  1877s
+  chunks 664/785  1889s
+  chunks 668/785  1900s
+  chunks 672/785  1912s
+  chunks 676/785  1923s
+  chunks 680/785  1934s
+  chunks 684/785  1946s
+  chunks 688/785  1957s
+  chunks 692/785  1968s
+  chunks 696/785  1980s
+  chunks 700/785  1991s
+  chunks 704/785  2003s
+  chunks 708/785  2014s
+  chunks 712/785  2025s
+  chunks 716/785  2037s
+  chunks 720/785  2048s
+  chunks 724/785  2059s
+  chunks 728/785  2071s
+  chunks 732/785  2082s
+  chunks 736/785  2094s
+  chunks 740/785  2105s
+  chunks 744/785  2116s
+  chunks 748/785  2128s
+  chunks 752/785  2139s
+  chunks 756/785  2150s
+  chunks 760/785  2162s
+  chunks 764/785  2173s
+  chunks 768/785  2185s
+  chunks 772/785  2196s
+  chunks 776/785  2207s
+  chunks 780/785  2219s
+  chunks 784/785  2230s
+  chunks 785/785  2236s
+saved oracle_out/oracle.npz: 200175 rows x 111 programs in 2237s
+== E1 Oracle headroom ==
+  positions: 200175
+  base_nll: 2.5822248458862305
+  oracle_nll_reduction: 0.9155068397521973
+  oracle_pct_of_base: 35.454185485839844
+  frac_helped: 0.8487173722992382
+  best_static: {'program': 'swap@14', 'mean_dnll': 0.03753418102860451}
+  frac_tokens_with_safe_skip: 0.9986811539902585
+  [repeat] gain if restricted: 0.7884  best-op share: 43.5%  best static: repeat@14x2
+  [skip] gain if restricted: 0.7205  best-op share: 34.3%  best static: skip@14
+  [swap] gain if restricted: 0.5250  best-op share: 7.1%  best static: swap@14
+
+== E2/E3 Routers on held-out chunks (lambda = 0) ==
+  oracle:      -0.8947
+  best static: +0.0380  (swap@14, chosen on train)
+  features                     dNLL              95% CI    AUC  edit%  +layers  ops used
+  same_interp               +0.0852 [+0.0785,+0.0916]  0.353  68.2%   +0.375  repeat:53% skip:32% swap:16%
+  lag_interp                +0.0471 [+0.0418,+0.0530]  0.481  49.2%   +0.337  repeat:57% skip:10% swap:33%
+  lag_interp_surprisal      +0.0481 [+0.0424,+0.0538]  0.484  50.4%   +0.331  repeat:56% skip:11% swap:33%
+  same_raw                  +0.1204 [+0.1073,+0.1322]  0.389  97.6%   +0.850  repeat:66% skip:20% swap:14%
+  lag_raw                   +0.1053 [+0.0953,+0.1154]  0.464  96.3%   +0.726  repeat:62% skip:19% swap:19%
+
+== E2 Budget-matched dNLL (best frontier point with <= budget extra layers/token) ==
+                              -1.00    -0.50    +0.00    +0.25    +0.50
+  oracle                          —  -0.8435  -0.8887  -0.8942  -0.8946
+  same_interp               +0.0843  +0.0842  +0.0000  +0.0000  +0.0000
+  lag_interp                +0.0804  +0.0584  +0.0000  +0.0000  +0.0000
+  lag_interp_surprisal      +0.0785  +0.0589  +0.0000  +0.0000  +0.0000
+  same_raw                        —  +0.0869  +0.0000  +0.0000  +0.0000
+  lag_raw                   +0.0916  +0.0913  +0.0000  +0.0000  +0.0000
+
+  E3 lag recovery (t-1 interp / same-token interp at lambda=0): None
+
+== E4 Lagged interp feature groups (lambda = 0) ==
+  lens_ent                  +0.0033  +layers +0.025
+  lens_agree                +0.0008  +layers +0.005
+  upd_norm                  +0.0245  +layers +0.181
+  attn_ent                  +0.0257  +layers +0.172
+
+saved oracle_out/frontier.png and results.json
+PIPELINE_DONE

@@ -1,0 +1,7 @@
+# Diagnostics on oracle_out/oracle.npz (gpt2, 500,055 rows), run on the pod after probe.py.
+# helped = min over programs of dNLL < -0.05 nats
+base NLL helped 4.161 vs not 0.016
+corr(base_nll, oracle gain) 0.636
+mean |delta| over programs, helped 0.831 not 0.735
+frac programs that help a given token: 0.367
+mean over tokens of mean-over-programs delta: 0.5597

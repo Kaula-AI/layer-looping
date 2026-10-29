@@ -1,6 +1,18 @@
-# Layer looping: per-token layer programs in a frozen LLM
+<div align="center">
 
-A [Kaula AI](https://github.com/Kaula-AI) research project. *Status: experiments in progress; no results yet.*
+# Layer Looping
+
+**Per-token layer programs in a frozen LLM: how much is there to gain, and can the previous token see it coming?**
+
+Tyler Gee · [Kāula](https://kaula.ai)
+
+[**Paper (PDF)**](paper/paper.pdf) · [**Explainer**](https://kaula-ai.github.io/layer-looping/) · [**Experiments**](EXPERIMENTS.md) · [**Citation**](#citation)
+
+</div>
+
+---
+
+> **Status: experiments in progress; no results yet.** The paper draft's results render as `[pending]` until `bash run_experiments.sh full` has run and `python scripts/make_tables.py` has filled them in from `results.json`.
 
 A pretrained transformer sends every token through every layer once. This project asks three questions:
 
@@ -49,6 +61,8 @@ See [`EXPERIMENTS.md`](EXPERIMENTS.md) for each experiment's question, hypothesi
 | `program_eval.py` | Whole-sequence routing with arbitrary per-token paths |
 | `manim_scenes.py`, `docs/explainer.html` | Animations for talks |
 | `tests/` | Correctness tests (all CPU) |
+| `paper/`, `scripts/make_tables.py` | LaTeX paper draft; renders `results.json` into its tables |
+| `pilot/` | Exploratory whole-sequence pilot on GPT-2 small and Qwen3-1.7B (not the per-token oracle) |
 | `CLAUDE.md` | Working brief for coding agents |
 
 ## Related work
@@ -66,6 +80,25 @@ What this project adds:
 - routes decided **one token early**;
 - a controlled comparison of interpretable, raw and SAE signals as router inputs;
 - a compute frontier where skips pay for loops, against static and heuristic baselines.
+
+## Paper
+`paper/` holds the LaTeX draft and the built PDF. Every number in it is generated from a saved `results.json`:
+
+```bash
+python scripts/make_tables.py --results oracle_out_full/results.json
+make -C paper
+```
+
+## Citation
+```bibtex
+@misc{gee2026layerlooping,
+  title  = {Layer Looping: Per-Token Layer Programs in a Frozen {LLM}},
+  author = {Gee, Tyler},
+  year   = {2026},
+  note   = {K\={a}ula preprint},
+  url    = {https://github.com/Kaula-AI/layer-looping}
+}
+```
 
 ## License
 MIT. See [`LICENSE`](LICENSE).

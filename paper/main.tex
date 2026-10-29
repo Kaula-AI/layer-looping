@@ -1,0 +1,232 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{libertine}
+\usepackage[libertine]{newtxmath}
+\usepackage[margin=1.1in]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[dvipsnames]{xcolor}
+\usepackage[colorlinks=true,linkcolor=MidnightBlue,citecolor=MidnightBlue,urlcolor=MidnightBlue]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*}
+
+\newcommand{\pending}{\textcolor{BrickRed}{[pending]}}
+\newcommand{\dnll}{\Delta\mathrm{NLL}}
+\newcommand{\op}[1]{\textsf{#1}}
+
+% Numbers come from probe.py -> oracle_out_full/results.json -> scripts/make_tables.py.
+% Until that has run, every result renders as [pending].
+\IfFileExists{generated/results.tex}{\input{generated/results.tex}}{\input{placeholders.tex}}
+
+\title{\textbf{Layer Looping}\\[4pt]
+\large Per-token layer programs in a frozen LLM:\\ how much is there to gain, and can the previous token see it coming?}
+\author{Tyler Gee\\ \small K\=aula}
+\date{\small Preprint draft \textperiodcentered{} \today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+A pretrained transformer sends every token through every layer exactly once. We ask how much
+next-token loss is left on the table by that choice, and whether the right per-token change can
+be chosen \emph{before} the token is processed. For every token of a frozen Gemma-2-2B we compute
+the exact change in its next-token negative log-likelihood under 104 layer programs: repeat one
+layer $k$ times, skip one layer, swap two adjacent layers, or loop the block of layers 10--13. Only
+that token's computation changes. From this per-token oracle we measure (i)~headroom by edit
+type and layer; (ii)~a signed-cost compute--accuracy frontier on which skips can pay for loops;
+(iii)~how much of that headroom a linear router recovers from the \emph{previous} token's
+internals, against a same-token router and training-free entropy- and norm-gated baselines from
+prior work; and (iv)~whether interpretable signals (logit-lens entropy and agreement, residual
+update norms, attention entropy, Gemma Scope SAE latents) carry that information as well as raw
+hidden states. We also measure how much of the per-token gain survives when routes are applied to
+whole sequences, where edited tokens change what later tokens attend to.
+\end{abstract}
+
+\section{Introduction}
+
+Adaptive-depth methods---adaptive computation time~\citep{graves2016act}, universal
+transformers~\citep{dehghani2019universal}, early exiting~\citep{schuster2022calm},
+mixture-of-depths~\citep{raposo2024mod}, layer dropping~\citep{fan2020layerdrop,men2024shortgpt}---assume
+tokens differ in how much computation they need. Frozen models tolerate having layers skipped,
+repeated, or reordered~\citep{sun2024painters,lad2024robustness}, and recent training-free methods
+re-apply layers per token at high-entropy positions~\citep{bhattacharjee2026eglr} or where the
+hidden-state norm peaks~\citep{zhang2026telltale}. Static mid-block loops in frozen models give
+gains within noise~\citep{lys2026innerloop,chen2026trainingfreeloop}, and learned routers have
+repeatedly recovered little of oracle headroom~\citep{glavas2024dynamic,alizadeh2024duo}.
+
+What is missing is a clean measurement: for each token in a frozen model, \emph{exactly} how much
+would a small edit to its own layer schedule help, and is that predictable from information
+available before the token's forward pass? Our contributions:
+\begin{enumerate}
+  \item \textbf{An exact per-token oracle} over repeat, skip, swap and block-loop programs in
+        Gemma-2-2B, computed for all positions in about one forward pass per program (\cref{sec:oracle}).
+  \item \textbf{A signed-cost frontier} in which skips ($-1$) pay for repeats, against static
+        programs and training-free baselines from prior work.
+  \item \textbf{Routing from token $t-1$}, decided before token $t$'s pass, compared with a
+        same-token router.
+  \item \textbf{A controlled comparison} of interpretable signals, raw hidden states and SAE latents
+        as router inputs.
+  \item \textbf{The interaction gap}: how much of the summed per-token gain survives when whole
+        routes are applied to sequences.
+\end{enumerate}
+
+\section{Method}
+\label{sec:oracle}
+
+\paragraph{Layer programs.}
+Gemma-2-2B has $L=26$ layers, applied in order $0,\dots,L-1$. A program $c$ is one edit to this
+schedule for a single token: \op{repeat}@$\ell$\,$\times k$ ($k\in\{2,3\}$, cost $k-1$),
+\op{skip}@$\ell$ (cost $-1$), \op{swap}@$\ell$ (run $\ell+1$ before $\ell$, cost $0$), plus the
+static block loop of layers 10--13 run twice, the best block reported by \citet{lys2026innerloop}
+(cost $4$). That is 104 programs. Cost counts extra layer applications.
+
+\paragraph{The diagonal swap.}
+We want token $t$'s next-token loss when only $t$ runs program $c$ and every other token runs
+normally. Because the model is causal, we can compute this for all positions at once. At each
+step of the program, a query attends to the \emph{base-pass} keys and values of every other
+position at the layer being run, and to its \emph{own} modified key and value on the diagonal.
+This is exact for each token's own loss, at the cost of about one forward pass per program. It
+ignores the effect of $t$'s modified key and value on later tokens; \cref{sec:interaction}
+measures that separately. CPU tests on tiny random Gemma-2 models check that every oracle delta
+equals an independent recompute that truncates the sequence at $t$ and runs the program normally.
+
+\paragraph{Oracle and routers.}
+$\dnll_t(c) = \mathrm{NLL}_t(c) - \mathrm{NLL}_t(\text{base})$; negative means the edit helps. The
+oracle picks $\arg\min_c \dnll_t(c)$, falling back to the base program when nothing helps. A token
+is \emph{helped} if the oracle gain exceeds $0.05$ nats, and a skip is \emph{safe} if its
+$\dnll < 0.01$. A router predicts the vector $\widehat{\dnll}_t$ by ridge regression and routes to
+$\arg\min_c [\widehat{\dnll}_t(c) + \lambda\,\mathrm{cost}(c)]$ (base if the minimum is
+non-negative); sweeping $\lambda$ traces its frontier, and we always report \emph{realized} $\dnll$.
+The \textbf{same-token} router reads token $t$'s base-pass features; the \textbf{lagged} router
+reads token $t-1$'s, which exist before $t$ is processed.
+
+\paragraph{Features and baselines.}
+Interpretable features are four per-layer groups: logit-lens~\citep{nostalgebraist2020logitlens}
+entropy, logit-lens agreement with the final prediction, relative residual-update norm, and
+attention entropy. We compare them with raw hidden states and with Gemma Scope
+SAE~\citep{lieberum2024gemmascope} latents at layers 6, 12 and 18. Training-free baselines: an
+EGLR-like rule~\citep{bhattacharjee2026eglr} that repeats a top layer when next-token entropy is
+high (decided at $t$, or one token early), and a norm-peak rule~\citep{zhang2026telltale} that
+repeats the layer with the largest update norm.
+
+\paragraph{Data and evaluation.}
+WikiText-103 prose and GSM8K question--answer text in alternating 512-token chunks, each starting
+with BOS. Chunks with index $\equiv 0 \pmod 5$ are held out; 95\% confidence intervals come from
+bootstrap resampling over held-out chunks.
+
+\section{Results}
+
+\subsection{Headroom (E1)}
+Over \resPositions{} positions with base NLL \resBaseNLL{} nats/token, the per-token oracle reduces
+NLL by \resOracleGain{} nats (\resOraclePct\% of base) and helps \resFracHelped{} of tokens. The
+best static program, applied to every token, is \resBestStatic{} with mean $\dnll$
+\resBestStaticDnll. A safe skip exists for \resSafeSkip{} of tokens.
+
+\begin{table}[h]
+\centering
+\caption{Oracle headroom by edit type. \emph{Restricted gain}: oracle gain using only this edit
+type. \emph{Best-op share}: fraction of all tokens that are helped and whose best edit is this type.}
+\label{tab:headroom}
+\begin{tabular}{lccl}
+\toprule
+Edit & Restricted gain (nats) & Best-op share & Best static \\
+\midrule
+\HeadroomRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Compute--accuracy frontier (E2)}
+
+\begin{figure}[h]
+\centering
+\IfFileExists{figures/frontier.png}{%
+  \includegraphics[width=0.85\linewidth]{figures/frontier.png}%
+}{%
+  \fbox{\parbox[c][2.2in][c]{0.8\linewidth}{\centering\pending\\[2pt]\small\texttt{bash run\_experiments.sh full}, then \texttt{scripts/make\_tables.py}}}%
+}
+\caption{NLL saved versus extra layer applications per token. Curves are Pareto fronts over
+$\lambda$; markers are static programs.}
+\label{fig:frontier}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Budget-matched $\dnll$ (nats/token; lower is better): the best frontier point using at most
+the given extra layer applications per token. ``---'': unreachable.}
+\label{tab:budget}
+\small
+\BudgetTable
+\end{table}
+
+\subsection{Does the previous token know? (E3)}
+The lagged interpretable router retains \resLagRecovery{} of the same-token router's gain.
+
+\begin{table}[h]
+\centering
+\caption{Routers at $\lambda=0$ on held-out chunks. AUC: detecting helped tokens from the predicted
+best gain. \emph{Edit\%}: share of tokens routed away from the base program.}
+\label{tab:routers}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Features & $\dnll$ & 95\% CI & AUC & Edit\% / +layers \\
+\midrule
+\RouterRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What carries the signal? (E4)}
+\SAENote
+
+\begin{table}[h]
+\centering
+\caption{Lagged routers using one interpretable feature group ($\lambda=0$).}
+\label{tab:ablation}
+\begin{tabular}{lcc}
+\toprule
+Feature group & $\dnll$ & +layers \\
+\midrule
+\AblationRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Interaction gap (E5)}
+\label{sec:interaction}
+\pending{} Whole-sequence routed loss versus the sum of independent per-token oracle deltas, from
+\texttt{routed\_eval.py} with first-pass KV caching.
+
+\section{Related work}
+\textbf{Per-token computation in frozen models.} EGLR~\citep{bhattacharjee2026eglr} re-applies the
+top layers at high-entropy tokens and the Tell-Tale Norm~\citep{zhang2026telltale} recurses layers
+guided by hidden-state norms; both decide from the current token, after its pass. Think-at-Hard~\citep{fu2025thinkathard}
+adds whole-model iterations for hard tokens with a trained backbone. \textbf{Programs of layers.}
+CoLa~\citep{li2025cola} searches per-sample skip/repeat chains, POLAR~\citep{li2026polar} learns
+programs of layers, and Dr.LLM~\citep{heakl2025drllm} trains sequence-level routers. \textbf{Static
+loops.} Inner Loop Inference~\citep{lys2026innerloop} and Training-Free Looped
+Transformers~\citep{chen2026trainingfreeloop} loop fixed blocks. \textbf{Routers versus oracles.}
+\citet{glavas2024dynamic} find per-token skip controllers no better than a constant input, and
+Duo-LLM~\citep{alizadeh2024duo} finds large gaps between oracles and learned routers.
+\citet{wei2026earlyexit} argue skip headroom is shrinking in modern models. \textbf{Adaptive
+depth with training.} ACT~\citep{graves2016act}, universal transformers~\citep{dehghani2019universal},
+CALM~\citep{schuster2022calm}, mixture-of-depths~\citep{raposo2024mod}.
+
+\section{Limitations}
+The oracle is a hindsight upper bound: it picks the best of 104 outcomes per token, which rewards
+any edit that perturbs a wrong prediction. Per-token deltas ignore effects on later tokens; E5
+measures that gap. Routers are linear, the model is a single 2B checkpoint, and loss is measured
+with teacher forcing.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
