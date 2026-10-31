@@ -39,6 +39,9 @@ def get_args():
     p.add_argument("--lr", type=float, default=2e-4)
     p.add_argument("--rank", type=int, default=16)
     p.add_argument("--gate_lam", type=float, default=0.02)
+    p.add_argument("--loop_lr", type=float, default=None, help="lr for alpha/gate/pass-2 adapters (default: --lr)")
+    p.add_argument("--loop_adapter", type=int, default=0,
+                   help="rank of a pass-2-only residual adapter after each looped layer (0 = none; up-proj zero-init)")
     p.add_argument("--eval_tokens", type=int, default=200_000)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", required=True)
@@ -78,8 +81,13 @@ def mixed(tok, split_w, split_g, seq_len, n_tokens):
 class Loop(nn.Module):
     """Wraps layers s..e. Layers s..e-1 record their kwargs; layer e reruns s..e and mixes."""
 
-    def __init__(self, layers, s, e, variant, hidden):
+    def __init__(self, layers, s, e, variant, hidden, adapter_rank=0):
         super().__init__()
+        self.adapters = nn.ModuleList()
+        for _ in range(e - s + 1 if adapter_rank else 0):
+            ad = nn.Sequential(nn.Linear(hidden, adapter_rank, bias=False), nn.Linear(adapter_rank, hidden, bias=False))
+            nn.init.zeros_(ad[1].weight)
+            self.adapters.append(ad)
         self.layers, self.s, self.e, self.variant = layers, s, e, variant
         self.kw = {}
         self.h_in = None
@@ -113,6 +121,8 @@ class Rec(nn.Module):
         for i in range(lp.s, lp.e + 1):
             a_, k_ = lp.kw[i]
             h2 = lp.layers[i].inner(h2, *a_, **k_)
+            if len(lp.adapters):
+                h2 = h2 + lp.adapters[i - lp.s](h2.float()).to(h2.dtype)
         if lp.variant == "static":
             return h1 + lp.alpha * (h2 - h1)
         g = torch.sigmoid(lp.gate(h1.float())).to(h1.dtype)  # B, T, 1
@@ -129,10 +139,10 @@ def find_layers(model):
     raise RuntimeError("no decoder layer list found")
 
 
-def install_loop(model, variant, s, e):
+def install_loop(model, variant, s, e, adapter_rank=0):
     name, layers = find_layers(model)
     hidden = model.config.get_text_config().hidden_size
-    loop = Loop(None, s, e, variant, hidden).to(next(model.parameters()).device)
+    loop = Loop(None, s, e, variant, hidden, adapter_rank).to(next(model.parameters()).device)
     for i in range(s, e + 1):
         layers[i] = Rec(layers[i], i, loop)
     object.__setattr__(loop, "layers", layers)
@@ -178,7 +188,7 @@ def main():
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16, attn_implementation="eager").to(dev)
     s, e = (int(v) for v in a.block.split("-"))
 
-    loop = install_loop(model, a.variant, s, e)
+    loop = install_loop(model, a.variant, s, e, a.loop_adapter)
     if a.variant != "base":
         from peft import LoraConfig, get_peft_model
         lname, _ = find_layers(model)
@@ -203,8 +213,11 @@ def main():
         log["eval"] = evaluate(model, None, sets, dev)
     else:
         params = [p_ for p_ in model.parameters() if p_.requires_grad]
+        lp_ids = {id(p_) for p_ in loop.parameters()}
         print(f"trainable params: {sum(p_.numel() for p_ in params) / 1e6:.2f}M", flush=True)
-        opt = torch.optim.AdamW(params, lr=a.lr, weight_decay=0.0)
+        opt = torch.optim.AdamW([{"params": [p_ for p_ in params if id(p_) not in lp_ids]},
+                                 {"params": [p_ for p_ in params if id(p_) in lp_ids], "lr": a.loop_lr or a.lr}],
+                                lr=a.lr, weight_decay=0.0)
         sched = torch.optim.lr_scheduler.LambdaLR(
             opt, lambda i: min(1.0, (i + 1) / 50) * 0.5 * (1 + math.cos(math.pi * min(i, a.steps) / a.steps)))
         model.train()
