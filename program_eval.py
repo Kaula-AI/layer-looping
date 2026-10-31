@@ -20,14 +20,14 @@ import torch
 
 from controller import Controller
 from decode import decode_nll_paths
-from oracle import G2, lens_features_np, make_chunks
+from oracle import lens_features_np, make_chunks, make_g
 
 PAD = -1
 
 
 def get_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="google/gemma-2-2b")
+    p.add_argument("--model", default="google/gemma-4-E2B")
     p.add_argument("--library", default="programs_out/library.npz")
     p.add_argument("--controller", default="programs_out/controller.pt")
     p.add_argument("--policy", choices=["oracle", "controller"], nargs="+", default=["oracle", "controller"])
@@ -69,7 +69,7 @@ def main():
     tok = AutoTokenizer.from_pretrained(a.model)
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
-    g = G2(model)
+    g = make_g(model)
     chunks, _ = make_chunks(tok, a.n_tokens, a.seq_len)
     test_ids = [c for c in range(len(chunks)) if c % 5 == 0][: a.n_chunks]
     res = {}

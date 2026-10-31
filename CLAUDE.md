@@ -55,10 +55,14 @@ whole-sequence interaction gap measured; (2) routing decided from t−1 before t
 router found); (4) signed-cost frontier where skips pay for loops, against static and heuristic baselines.
 
 ## Model and setup
-- `google/gemma-2-2b` (26 layers; Gemma Scope SAEs exist for every layer). bf16, eager attention.
+- `google/gemma-4-E2B` (35 layers; ungated; manual forward `G4`). bf16, eager attention. Gemma-2-2B (`G2`, 26 layers)
+  stays supported as the second model (E7) and is where the Gemma Scope SAE comparison runs: there are no
+  Gemma Scope SAEs for Gemma-4. `oracle.make_g` picks the class from the model type.
 - Data: WikiText-103 prose + GSM8K Q/A text, alternating 512-token chunks with BOS.
 - Action space: single-edit **layer programs** per token (`oracle.build_programs`): repeat ℓ×k (k ∈ {2,3}),
-  skip ℓ, swap ℓ/ℓ+1 — 103 programs — plus static block loop 10–13×2 (prior-work baseline). Signed cost: repeat k−1,
+  skip ℓ, swap ℓ/ℓ+1 — 139 programs on E2B (103 on Gemma-2-2B) — plus a static block loop (prior-work baseline:
+  Inner Loop Inference's Gemma-2-2B block 10–13×2, scaled to 13–16×2 on E2B by `oracle.default_block`; no
+  published best block exists for Gemma-4). Signed cost: repeat k−1,
   skip −1, swap 0, block (e−s+1)(R−1) extra layer applications.
   **Part 2 (E9–E12):** full per-token paths over the frozen layer library: repeats, skips, swaps, reversed and
   looped blocks, in any combination (`programs.py`), found by per-token beam search (`search.py`), distilled into
@@ -66,6 +70,16 @@ router found); (4) signed-cost frontier where skips pay for loops, against stati
   evaluation (`program_eval.py`). Framing: depth recurrence with a choice of cell.
 - Hardware: one 24 GB GPU (RunPod RTX 4090). Do not debug on rented time longer than needed; run the tests,
   `--check` and the quick run first.
+
+## Gemma-4 K/V sharing (E2B)
+Layers 15–34 of E2B have no K/V projections: each attends to the K/V of layer 13 (sliding layers) or 14 (full
+layers). Rule used by every executor (`G4`, `run_program`, `run_paths`, `routed_eval`, `decode`): earlier tokens
+are seen through their base-pass / first-pass K/V of the source layer, and the edited token sees its **latest**
+own K/V of the source. If its path has not visited the source yet, that K/V is projected from the token's state
+when its path first reaches a higher-index layer (for a plain skip of 13 or 14: from that layer's input), the same
+rule `decode.py` uses to fill the cache for unvisited layers. So an edit at 13 or 14 also changes what up to 20
+later layers attend to for that token: report edits of layers 13/14 separately in E1. Per-layer embeddings: layer ℓ
+always gets the token's own slice ℓ, wherever ℓ appears in a path; a skipped layer adds none.
 
 ## Key method detail: the diagonal swap
 `oracle.py` runs a layer program (`G2.run_program`) for every position at once, but at each step a query
@@ -78,7 +92,8 @@ first pass; a skipped token's K/V at ℓ are still projected from its input) and
 ## Files
 - `EXPERIMENTS.md` — **the experiment plan (E0–E8)**: question, hypothesis, command, metric, pass/kill.
 - `run_experiments.sh` — modes `quick` (E0–E4, 20k tokens), `full` (E1–E6, 200k), `sae` (E4 SAE), `downstream` (E8).
-- `oracle.py` — manual Gemma-2 forward (`G2`, `run_program`, `independent_program_nll`), `build_programs`,
+- `oracle.py` — manual forwards `G2` (Gemma-2) and `G4` (Gemma-4, subclass overriding the architecture hooks),
+  `make_g`, `run_program`, `independent_program_nll`, `build_programs`,
   oracle collection, base-pass features. `--check`: HF parity, swap identity, oracle vs independent recompute.
 - `probe.py` — E1 headroom by op, E2 signed-cost λ sweep → Pareto fronts + budget-matched ΔNLL, E3 same vs
   t−1 routers with bootstrap CIs, E4 feature-group ablation; training-free baselines (EGLR-like entropy gate,
@@ -95,26 +110,30 @@ first pass; a skipped token's K/V at ℓ are still projected from its input) and
   `library.npz` is oracle-format, so `probe.py` / `analyze_tokens.py` run on it.
 - `controller.py` — E11 cheap MLP controller (predict dNLL per path, argmin + λ·cost) vs oracles and baselines.
 - `program_eval.py` — E12 whole-sequence routing with arbitrary paths (token-by-token, first-pass KV).
-- `G2.run_paths` / `G2.layer_rows` — mixed-path executor: every position follows its own path in one pass.
+- `run_paths` / `layer_rows` (on `G2`, inherited by `G4`) — mixed-path executor: every position follows its own path in one pass.
 - `manim_scenes.py`, `docs/explainer.html` — animations. `docs/novelty-review.md` — literature review.
-- `tests/` — CPU tests on tiny random Gemma-2s (`python -m pytest -q tests`, 13 tests): HF parity, swap identity,
+- `tests/` — CPU tests on tiny random Gemma-2s and a tiny random Gemma-4 with K/V sharing and per-layer embeddings
+  (`tests/test_gemma4.py`) (`python -m pytest -q tests`, 25 tests): HF parity, swap identity,
   oracle == independent recompute for repeat/skip/swap/block, routed single-token edit == oracle, token-by-token
   decode == routed_forward, prefill+decode, decode features == base features, mixed-path executor == independent
   recompute for random paths, arbitrary-path decoding, search fronts exact and non-dominated, grammar.
 
 ## Status
-All code paths are written and pass the CPU tests. Nothing has run on Gemma-2-2B yet: there are no results.
+All code paths are written and pass the CPU tests, for Gemma-2 and Gemma-4. Ported to Gemma-4 E2B on 2026-10-31.
+No experiment has run on either model yet: there are no results.
 
 ## Tasks, in order
 Follow `EXPERIMENTS.md`. Concretely:
-1. **Environment.** `pip install -r requirements.txt`; HF login with the Gemma license accepted.
+1. **Environment.** `pip install -r requirements.txt` (transformers ≥ 5.5 for Gemma-4). Gemma-4 is ungated; the
+   Gemma-2-2B runs (E7, SAE) need an HF login with the Gemma-2 license accepted.
 2. **Quick run.** `bash run_experiments.sh quick`. Check `check.txt` first: argmax agreement ≈ 1.0, swap
    identity ≈ 0, oracle-vs-independent difference small relative to typical |dNLL|. **Stop and report**
    E1 headroom by op, the λ=0 router table, the budget-matched row at 0, and lag recovery. The human decides
    whether to continue.
 3. **Full run.** `bash run_experiments.sh full` (E1–E6).
-4. **SAE (E4).** `bash run_experiments.sh sae`. Report the top latents with their Neuronpedia labels.
-5. **Robustness (E7).** Two of: domain transfer, split seeds, second model (needs a `G2` variant).
+4. **SAE (E4).** Only on a Gemma-2-2B oracle (`sae_features.py` refuses other models): run the oracle with
+   `--model google/gemma-2-2b`, then `bash run_experiments.sh sae`. Report the top latents with their Neuronpedia labels.
+5. **Robustness (E7).** Two of: domain transfer, split seeds, second model (Gemma-2-2B via `--model google/gemma-2-2b`).
 6. **Paths (E9–E12).** `bash run_experiments.sh programs-quick`, then `programs`, if E1 shows headroom.
    **Stop and report** after programs-quick: search vs single-edit oracle, library oracle, controller budget table.
 7. **Downstream (E8).** `bash run_experiments.sh downstream`, only if the kill conditions pass.
@@ -133,8 +152,9 @@ Follow `EXPERIMENTS.md`. Concretely:
 - Train/test split by chunk (`chunk % 5 == 0` is test). Never split within a sequence.
 - Every number in the paper must come from a saved artifact (`results.json`, logs). Seeds fixed.
 - Keep the LLM frozen. Only routers are trained.
-- Keep changes to `G2` minimal and covered by `--check` and the tests.
+- Keep changes to `G2`/`G4` minimal and covered by `--check` and the tests.
 
 ## Budget
 - Paths: programs-quick (20k tokens) ~1 h; programs (100k) ~4–6 h on one 4090.
-- Full oracle (104 programs × 200k tokens): ~1–2 h on one 4090. Routed eval + downstream: a few hours. Expect < $10–20 total.
+- Full oracle on Gemma-2-2B (104 programs × 200k tokens): ~1–2 h on one 4090. E2B has 35 layers and 140 programs,
+  so expect roughly 1.5–2× that; re-time from the quick run. Routed eval + downstream: a few hours. Expect < $10–20 total.

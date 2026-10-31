@@ -1,7 +1,8 @@
 # Per-token layer programs: experiment plan
 
-Model: Gemma-2-2B, frozen. Action space per token: one **single-edit layer program**:
-repeat layer ℓ k times (k ∈ {2, 3}), skip layer ℓ, or swap layers ℓ and ℓ+1. That is 103 programs, plus the static block loop 10–13×2 from Inner Loop Inference (arXiv 2602.14759) as a prior-work baseline.
+Model: Gemma-4 E2B (`google/gemma-4-E2B`, 35 layers), frozen. Gemma-2-2B (26 layers) is the second model (E7) and the one with Gemma Scope SAEs (E4). Action space per token: one **single-edit layer program**:
+repeat layer ℓ k times (k ∈ {2, 3}), skip layer ℓ, or swap layers ℓ and ℓ+1. That is 139 programs on E2B (103 on Gemma-2-2B), plus a static block loop as a prior-work baseline: Inner Loop Inference's (arXiv 2602.14759) Gemma-2-2B block 10–13×2, scaled to 13–16×2 on E2B. No best block has been published for Gemma-4, so also report the best static program found by E1.
+**K/V sharing.** On E2B, layers 15–34 attend to the K/V of layer 13 or 14. The edited token sees its latest own K/V of that source layer (see CLAUDE.md), so an edit at 13 or 14 reaches up to 20 later layers. Report those edits separately.
 Signed cost per token: repeat = k − 1, skip = −1, swap = 0 extra layer applications.
 
 Every experiment names its question, hypothesis, command, metric, and the result that kills or passes it.
@@ -12,12 +13,12 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 
 ## E0 Correctness (gate, ~$0.50)
 **Question.** Does the oracle measure what it claims?
-**Run.** `python tests/test_tiny.py` (CPU), then `python oracle.py --check` on the pod.
+**Run.** `python -m pytest -q tests` (CPU; Gemma-2 and Gemma-4 tiny models), then `python oracle.py --check` on the pod.
 **Pass.**
 - The tiny tests pass for repeat, skip and swap. Each oracle delta equals an independent recompute that truncates the sequence at t and runs the program normally.
-- On Gemma-2-2B, argmax agreement with Hugging Face is about 1.0 and the swap identity is about 0.
+- On the real model, argmax agreement with Hugging Face is about 1.0 and the swap identity is about 0.
 
-`--check` also compares oracle deltas with an independent recompute on the real model (5 positions × 3 ops).
+`--check` also compares oracle deltas with an independent recompute on the real model (5 positions × a few ops, including edits of the K/V-source layers and the first K/V-shared layer).
 
 ## E1 Headroom by op (the go/no-go, ~$1 quick, ~$2 full)
 **Question.** How much does the best single edit help each token? Which ops and layers win, and how often is a skip free?
@@ -60,7 +61,7 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 **Question.** Do interpretable signals predict the route as well as a raw hidden-state probe? Which ones?
 **Run.**
 1. Read `probe.py → ablation`: logit-lens entropy, lens agreement, update norm and attention entropy, each alone.
-2. SAE features: `bash run_experiments.sh sae`. This encodes the residual stream at layers 6, 12 and 18 with Gemma Scope (`sae_features.py`, top-64 latents per layer). It selects 1,024 latents on train rows by correlation with the next token's gain per op, and adds `lag_sae` and `lag_interp_sae` routers to `probe.py`.
+2. SAE features (Gemma-2-2B only: Gemma Scope has no Gemma-4 SAEs, so this runs on the E7 Gemma-2-2B oracle): `bash run_experiments.sh sae`. This encodes the residual stream at layers 6, 12 and 18 with Gemma Scope (`sae_features.py`, top-64 latents per layer). It selects 1,024 latents on train rows by correlation with the next token's gain per op, and adds `lag_sae` and `lag_interp_sae` routers to `probe.py`.
 3. For the 10 most predictive SAE features, look up their Neuronpedia descriptions and report them.
 
 **Pass.** Either interp matches raw at far lower dimension, or the top SAE features are interpretable and op-specific. Example: a "number coming next" feature predicts repeats, and a "predictable continuation" feature predicts skips.
@@ -94,7 +95,7 @@ Routes use repeat and skip only; swaps are oracle-only.
 ## E7 Robustness (pick 2)
 - **Domains.** Prose-only vs math-only splits. Does a router trained on one transfer to the other?
 - **Split seeds.** Re-run `probe.py` with the test fold set to `chunk % 5 == {1,2,3,4}`.
-- **Second model.** Llama-3.2-1B or Qwen2.5-1.5B. This needs a `G2` variant for that architecture. It's worth doing if a reviewer would ask "is this Gemma-specific?"
+- **Second model.** Gemma-2-2B (`--model google/gemma-2-2b`, supported by `G2`). It answers "is this Gemma-4-specific?" (no K/V sharing, no per-layer embeddings) and hosts the SAE comparison (E4).
 
 ## E8 Downstream (only if E1–E5 pass)
 **Question.** Does routed decoding improve task accuracy at matched compute?
@@ -176,6 +177,8 @@ The first and last two layers are never edited, and path length stays within L�
 | E5 | routed_eval × 6 | ~1 h | ~$0.50 |
 | E4 SAE | sae_lens encode + probe | ~1 h | ~$0.50 |
 | E8 | GSM8K generation × 4 configs | ~3 h | ~$2 |
+
+Times are Gemma-2-2B estimates. E2B has 35 layers and 140 programs, so expect roughly 1.5–2× for the oracle steps; re-time from the quick run.
 
 ## Paper mapping
 If Part 2 works, it becomes the headline: Fig 2 is the controller frontier against the oracles and baselines (E11), and the single-edit map becomes the motivating analysis.

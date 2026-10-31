@@ -26,7 +26,7 @@ PAD = -1
 
 def get_args(argv=None):
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="google/gemma-2-2b")
+    p.add_argument("--model", default="google/gemma-4-E2B")
     p.add_argument("--search", default="programs_out/search.npz")
     p.add_argument("--n_composite", type=int, default=128)
     p.add_argument("--front_weight", default="best", choices=["best", "front"],
@@ -72,7 +72,7 @@ def build_library(S, L, a):
 def main():
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    from oracle import G2, base_records, feat_names, make_chunks
+    from oracle import base_records, feat_names, make_chunks, make_g
 
     a = get_args()
     S = np.load(a.search)
@@ -83,7 +83,7 @@ def main():
     tok = AutoTokenizer.from_pretrained(a.model)
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
-    g = G2(model)
+    g = make_g(model)
     raw_layer = a.raw_layer if a.raw_layer is not None else L // 2
     chunks, names = make_chunks(tok, a.n_tokens, a.seq_len)
     rec = {k: [] for k in ["delta", "feat", "base_nll", "raw", "tok", "chunk", "pos"]}

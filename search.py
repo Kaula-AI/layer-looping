@@ -25,7 +25,7 @@ PAD = -1
 
 def get_args(argv=None):
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="google/gemma-2-2b")
+    p.add_argument("--model", default="google/gemma-4-E2B")
     p.add_argument("--seq_len", type=int, default=512)
     p.add_argument("--batch", type=int, default=4)
     p.add_argument("--n_tokens", type=int, default=100_000)
@@ -128,14 +128,14 @@ def search_batch(g, ids, hs, kvs, cs, base_nll, a):
 def main():
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    from oracle import G2, base_records, feat_names, make_chunks
+    from oracle import base_records, feat_names, make_chunks, make_g
 
     a = get_args()
     dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     tok = AutoTokenizer.from_pretrained(a.model)
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
-    g = G2(model)
+    g = make_g(model)
     L = len(g.layers)
     raw_layer = a.raw_layer if a.raw_layer is not None else L // 2
     chunks, names = make_chunks(tok, a.n_tokens, a.seq_len)

@@ -29,12 +29,12 @@ import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from oracle import G2, make_chunks
+from oracle import make_chunks, make_g
 
 
 def get_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="google/gemma-2-2b")
+    p.add_argument("--model", default="google/gemma-4-E2B")
     p.add_argument("--policy", choices=["none", "static", "oracle", "router"], default="none")
     p.add_argument("--program", default="repeat@13x2", help="for --policy static: repeat@LxK or skip@L")
     p.add_argument("--lam", type=float, default=0.0)
@@ -52,21 +52,31 @@ def routed_forward(g, ids, route_l, route_k, return_kv=False):
     """route_l, route_k: (B, T) long. route_l = -1: no edit. route_k >= 2: repeat layer route_l
     route_k times. route_k == 0: skip layer route_l. With return_kv, also returns the first-pass
     K/V per layer (a prefill cache for decode.step)."""
-    B, T = ids.shape
-    pos = torch.arange(T, device=ids.device).unsqueeze(0).expand(B, -1)
     h = g.embed(ids)
-    cos, sin = g.rotary(h, pos)
-    kvs = []
+    cs = g.context(ids, h)
+    kvs, latest = [], {}  # latest: each token's own K/V of K/V-source layers (Gemma-4), from its latest visit
     for li in range(len(g.layers)):
-        out, kv, _ = g.layer(li, h, cos, sin)
+        sl = g.kv_src(li)
+        if sl == li:
+            out, kv, _ = g.layer(li, h, cs)
+            own = None
+        else:  # K/V-shared layer: earlier tokens' first-pass source K/V, own latest K/V on the diagonal
+            kv, own = kvs[sl], latest[sl]
+            out, _, _ = g.layer(li, h, cs, base_kv=kv, own_kv=own)
         kvs.append(kv)
+        if li in g.kv_sources:
+            latest[li] = kv
         here = route_l == li
         rep = here & (route_k >= 2)
         if rep.any():
             x = out
             for it in range(2, int(route_k[rep].max().item()) + 1):
-                nxt, _, _ = g.layer(li, x, cos, sin, base_kv=kv)
-                x = torch.where((rep & (route_k >= it)).unsqueeze(-1), nxt, x)
+                nxt, kv2, _ = g.layer(li, x, cs, base_kv=kv, own_kv=own)
+                m = rep & (route_k >= it)
+                x = torch.where(m.unsqueeze(-1), nxt, x)
+                if li in g.kv_sources:
+                    mm = m[:, None, :, None]
+                    latest[li] = tuple(torch.where(mm, new_, old_) for new_, old_ in zip(kv2, latest[li]))
             out = x
         skp = here & (route_k == 0)
         if skp.any():
@@ -97,7 +107,7 @@ def main():
     tok = AutoTokenizer.from_pretrained(a.model)
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
-    g = G2(model)
+    g = make_g(model)
     chunks, _ = make_chunks(tok, a.n_tokens, a.seq_len)
     idx = [c for c in range(len(chunks)) if (c % 5 == 0 or not a.test_only)]
 

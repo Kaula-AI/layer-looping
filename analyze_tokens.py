@@ -24,7 +24,7 @@ from transformers import AutoTokenizer
 p = argparse.ArgumentParser()
 p.add_argument("--path", default="oracle_out/oracle.npz")
 p.add_argument("--out_dir", default="oracle_out")
-p.add_argument("--model", default="google/gemma-2-2b")
+p.add_argument("--model", default="google/gemma-4-E2B")
 p.add_argument("--thr", type=float, default=0.05)
 p.add_argument("--skip_eps", type=float, default=0.01)
 a = p.parse_args()

@@ -35,12 +35,11 @@ TOL = 1e-4
 def independent_nll(seq, t, b, hs):
     """Token t of sequence b follows program `seq`; everything else is the base model."""
     ids = IDS[b : b + 1, : t + 2]
-    pos = torch.arange(t + 1).unsqueeze(0)
-    cos, sin = G.rotary(hs[0][b : b + 1, : t + 1], pos)
+    cs = G.context(IDS[b : b + 1, : t + 1])
     x = hs[0][b : b + 1, t : t + 1]
     for li in seq:
         inp = torch.cat([hs[li][b : b + 1, :t], x], 1)  # others: base input to layer li
-        out, _, _ = G.layer(li, inp, cos, sin)
+        out, _, _ = G.layer(li, inp, cs)
         x = out[:, -1:]
     logits = G.logits(x)[0, 0]
     return torch.nn.functional.cross_entropy(logits[None], ids[0, t + 1][None])
@@ -59,7 +58,7 @@ def test_swap_identity():
     assert (G.run_program(hs, kvs, cs, list(range(L))) - hs[-1]).abs().max() < 1e-5
     x = hs[1]
     for li in range(1, L):
-        x, _, _ = G.layer(li, x, *cs, base_kv=kvs[li])
+        x, _, _ = G.layer(li, x, cs, base_kv=kvs[li])
     assert (x - hs[-1]).abs().max() < 1e-5
 
 
