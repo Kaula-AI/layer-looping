@@ -1,0 +1,12 @@
+40 chunks x 512 tokens, 140 programs (repeat: 70, skip: 35, swap: 34, block: 1), device cuda
+4/40 chunks | 0.2 min | ETA 2.1 min
+8/40 chunks | 0.5 min | ETA 1.9 min
+12/40 chunks | 0.7 min | ETA 1.6 min
+16/40 chunks | 0.9 min | ETA 1.4 min
+20/40 chunks | 1.2 min | ETA 1.2 min
+24/40 chunks | 1.4 min | ETA 0.9 min
+28/40 chunks | 1.6 min | ETA 0.7 min
+32/40 chunks | 1.9 min | ETA 0.5 min
+36/40 chunks | 2.1 min | ETA 0.2 min
+40/40 chunks | 2.3 min | ETA 0.0 min
+saved oracle_out_quick/oracle.npz  (20,440 positions)

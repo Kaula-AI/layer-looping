@@ -1,0 +1,113 @@
+== E0 correctness ==
+.........................                                                [100%]
+25 passed in 5.39s
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/1951 [00:00<?, ?it/s]Loading weights: 100%|██████████| 1951/1951 [00:00<00:00, 21133.84it/s]
+Generating test split:   0%|          | 0/4358 [00:00<?, ? examples/s]Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 802686.49 examples/s]
+Generating train split:   0%|          | 0/1801350 [00:00<?, ? examples/s]Generating train split:  11%|█         | 194000/1801350 [00:00<00:00, 1820338.56 examples/s]Generating train split:  24%|██▍       | 431000/1801350 [00:00<00:00, 2128107.75 examples/s]Generating train split:  37%|███▋      | 673000/1801350 [00:00<00:00, 2255492.83 examples/s]Generating train split:  50%|█████     | 901675/1801350 [00:00<00:00, 2200432.77 examples/s]Generating train split:  63%|██████▎   | 1143675/1801350 [00:00<00:00, 2273423.91 examples/s]Generating train split:  77%|███████▋  | 1387675/1801350 [00:00<00:00, 2326049.60 examples/s]Generating train split:  91%|█████████ | 1632675/1801350 [00:00<00:00, 2363854.42 examples/s]Generating train split: 100%|██████████| 1801350/1801350 [00:00<00:00, 2269486.04 examples/s]
+Generating validation split:   0%|          | 0/3760 [00:00<?, ? examples/s]Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 1670789.60 examples/s]
+Generating train split:   0%|          | 0/7473 [00:00<?, ? examples/s]Generating train split: 100%|██████████| 7473/7473 [00:00<00:00, 1511429.93 examples/s]
+Generating test split:   0%|          | 0/1319 [00:00<?, ? examples/s]Generating test split: 100%|██████████| 1319/1319 [00:00<00:00, 943754.18 examples/s]
+manual vs HF logits: max|diff| 0.1220 (logit scale 30.0); argmax agreement 0.9897
+diagonal-swap identity max|dh|: 0.625000 (should be ~0)
+oracle vs independent recompute: max|d dNLL| 0.1806 nats (bf16; should be << typical |dNLL|)
+== E1-E4 oracle (20000 tokens) ==
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/1951 [00:00<?, ?it/s]Loading weights: 100%|██████████| 1951/1951 [00:00<00:00, 20350.02it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+40 chunks x 512 tokens, 140 programs (repeat: 70, skip: 35, swap: 34, block: 1), device cuda
+4/40 chunks | 0.2 min | ETA 2.1 min
+8/40 chunks | 0.5 min | ETA 1.9 min
+12/40 chunks | 0.7 min | ETA 1.6 min
+16/40 chunks | 0.9 min | ETA 1.4 min
+20/40 chunks | 1.2 min | ETA 1.2 min
+24/40 chunks | 1.4 min | ETA 0.9 min
+28/40 chunks | 1.6 min | ETA 0.7 min
+32/40 chunks | 1.9 min | ETA 0.5 min
+36/40 chunks | 2.1 min | ETA 0.2 min
+40/40 chunks | 2.3 min | ETA 0.0 min
+saved oracle_out_quick/oracle.npz  (20,440 positions)
+== E1 Oracle headroom ==
+  positions: 20440
+  base_nll: 1.90755033493042
+  oracle_nll_reduction: 0.8137266039848328
+  oracle_pct_of_base: 42.65819549560547
+  frac_helped: 0.7548434442270059
+  best_static: {'program': 'repeat@7x2', 'mean_dnll': 0.014224229380488396}
+  frac_tokens_with_safe_skip: 0.9998043052837573
+  [repeat] gain if restricted: 0.6830  best-op share: 31.6%  best static: repeat@7x2
+  [skip] gain if restricted: 0.6079  best-op share: 29.5%  best static: skip@7
+  [swap] gain if restricted: 0.5656  best-op share: 14.0%  best static: swap@30
+  [block] gain if restricted: 0.0980  best-op share: 0.4%  best static: block@13-16x2
+
+== E2/E3 Routers on held-out chunks (lambda = 0) ==
+  oracle:      -0.7968
+  best static: +0.0136  (repeat@7x2, chosen on train)
+  features                     dNLL              95% CI    AUC  edit%  +layers  ops used
+  same_interp               +0.0769 [+0.0524,+0.1005]  0.201  91.1%   +0.188  repeat:39% skip:40% swap:21% block:0%
+  lag_interp                +0.0679 [+0.0555,+0.0824]  0.353  90.1%   +0.136  repeat:38% skip:36% swap:26% block:0%
+  lag_interp_surprisal      +0.0593 [+0.0420,+0.0748]  0.363  89.6%   +0.139  repeat:38% skip:37% swap:25% block:0%
+  same_raw                  +0.3298 [+0.2820,+0.3860]  0.451  99.9%   +0.511  repeat:49% skip:33% swap:18% block:1%
+  lag_raw                   +0.4284 [+0.3676,+0.4933]  0.516  99.9%   +0.412  repeat:45% skip:34% swap:21% block:0%
+
+== Prior-work heuristic baselines (training-free) ==
+  rule_entropy_same        best dNLL +0.0000 at +0.000 layers (threshold quantile None)
+  rule_entropy_lag         best dNLL +0.0000 at +0.000 layers (threshold quantile None)
+  rule_normpeak_same       best dNLL +0.0000 at +0.000 layers (threshold quantile None)
+  (entropy rules repeat repeat@31x2, the best top-4-layer repeat on train)
+
+== E2 Budget-matched dNLL (best frontier point with <= budget extra layers/token) ==
+                              -1.00    -0.50    +0.00    +0.25    +0.50
+  oracle                          —  -0.7707  -0.7966  -0.7968  -0.7968
+  same_interp               +0.0492  +0.0492  +0.0000  +0.0000  +0.0000
+  lag_interp                +0.0489  +0.0489  +0.0000  +0.0000  +0.0000
+  lag_interp_surprisal      +0.0514  +0.0514  +0.0000  +0.0000  +0.0000
+  same_raw                        —  +0.2352  +0.0000  +0.0000  +0.0000
+  lag_raw                         —  +0.3087  +0.0000  +0.0000  +0.0000
+  rule_entropy_same               —        —  +0.0000  +0.0000  +0.0000
+  rule_entropy_lag                —        —  +0.0000  +0.0000  +0.0000
+  rule_normpeak_same              —        —  +0.0000  +0.0000  +0.0000
+
+  E3 lag recovery (t-1 interp / same-token interp at lambda=0): None
+
+== E4 Lagged interp feature groups (lambda = 0) ==
+  lens_ent                  +0.0153  +layers -0.096
+  lens_agree                +0.0063  +layers +0.100
+  upd_norm                  +0.0208  +layers +0.009
+  attn_ent                  +0.0309  +layers -0.109
+
+saved oracle_out_quick/frontier.png and results.json
+group                                                       n    gain  helped safeSkip best_repeat   best_skip   best_swap  best_block
+token_t=digit                                            3451  0.4307   48.2%   100.0%       17.9%       21.5%        8.5%        0.2%
+token_t=function word                                    3408  1.0924   91.5%   100.0%       41.0%       33.3%       16.7%        0.6%
+token_t=operator                                         1472  0.4289   44.9%   100.0%       14.7%       21.9%        8.2%        0.1%
+token_t=punct                                            1922  0.9615   84.6%   100.0%       35.6%       31.4%       17.3%        0.2%
+token_t=whitespace/newline                               1271  0.7134   77.2%   100.0%       29.7%       30.9%       16.4%        0.2%
+token_t=word continuation                                1103  0.9473   73.7%    99.6%       32.6%       28.3%       12.5%        0.3%
+token_t=word start                                       7813  0.8950   84.0%   100.0%       35.8%       32.3%       15.4%        0.5%
+next=digit                                               3451  0.3106   42.2%   100.0%       17.2%       15.7%        9.1%        0.2%
+next=function word                                       3408  0.7753   86.3%   100.0%       25.7%       38.3%       21.8%        0.5%
+next=n/a                                                   40  0.4985   67.5%   100.0%       27.5%       32.5%        7.5%        0.0%
+next=operator                                            1472  0.5718   56.7%   100.0%       18.8%       28.6%        9.0%        0.3%
+next=punct                                               1922  0.8553   85.1%   100.0%       31.2%       41.7%       11.7%        0.5%
+next=whitespace/newline                                  1271  0.5569   74.4%   100.0%       30.1%       29.1%       14.9%        0.3%
+next=word continuation                                   1063  0.6274   51.6%   100.0%       21.5%       19.0%       10.8%        0.3%
+next=word start                                          7813  1.1568   90.1%    99.9%       44.6%       30.5%       14.7%        0.4%
+predicts first answer token                                52  1.5170  100.0%   100.0%       30.8%       34.6%       32.7%        1.9%
+source=gsm                                              10220  0.6078   63.5%   100.0%       24.9%       26.9%       11.5%        0.3%
+source=wiki                                             10220  1.0196   87.5%   100.0%       38.2%       32.2%       16.6%        0.5%
+position 0-16                                             640  1.7086   97.3%   100.0%       50.6%       25.2%       19.8%        1.7%
+position 16-64                                           1920  1.0156   88.7%   100.0%       40.8%       31.1%       16.5%        0.4%
+position 64-256                                          7680  0.7975   76.8%   100.0%       32.1%       29.9%       14.3%        0.4%
+position 256-10000                                      10200  0.7318   70.7%   100.0%       28.2%       29.2%       13.0%        0.3%
+base NLL quintile 1                                      4088  0.0071    0.0%   100.0%        0.0%        0.0%        0.0%        0.0%
+base NLL quintile 2                                      4088  0.1242   77.4%   100.0%       20.0%       47.2%       10.2%        0.1%
+base NLL quintile 3                                      4088  0.5437  100.0%   100.0%       38.6%       42.2%       18.9%        0.3%
+base NLL quintile 4                                      4088  1.1809  100.0%   100.0%       49.6%       30.6%       19.2%        0.7%
+base NLL quintile 5                                      4088  2.2127  100.0%   100.0%       49.7%       27.7%       21.9%        0.7%
+source=gsm (next-type mix matched to gsm)               10220  0.6078
+source=wiki (next-type mix matched to gsm)              10220  0.9164
+source=gsm (excluding whitespace/newline targets)        9392  0.6154   62.7%   100.0%       24.5%       26.8%       11.1%        0.2%
+source=wiki (excluding whitespace/newline targets)       9777  1.0377   87.9%   100.0%       38.5%       32.2%       16.7%        0.5%
+done (quick)
