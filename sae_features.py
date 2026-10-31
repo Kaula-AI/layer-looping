@@ -15,14 +15,14 @@ import time
 
 import numpy as np
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
-from oracle import G2, make_chunks
+from oracle import make_chunks, make_g
 
 
 def get_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="google/gemma-2-2b")
+    p.add_argument("--model", default="google/gemma-4-E2B")
     p.add_argument("--release", default="gemma-scope-2b-pt-res-canonical")
     p.add_argument("--width", default="16k")
     p.add_argument("--layers", type=int, nargs="+", default=[6, 12, 18])
@@ -38,11 +38,15 @@ def main():
     from sae_lens import SAE
 
     a = get_args()
+    if AutoConfig.from_pretrained(a.model).model_type != "gemma2":
+        raise SystemExit(f"{a.model}: Gemma Scope residual SAEs exist only for Gemma-2 (and Gemma-3 via Gemma Scope 2), "
+                         "not Gemma-4, so E4's SAE step is deferred for this model. Run with --model google/gemma-2-2b "
+                         "only on an oracle collected with that model.")
     dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     tok = AutoTokenizer.from_pretrained(a.model)
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
-    g = G2(model)
+    g = make_g(model)
     saes = [SAE.from_pretrained(a.release, f"layer_{l}/width_{a.width}/canonical", device=dev) for l in a.layers]
     width = int(saes[0].cfg.d_sae)
     chunks, _ = make_chunks(tok, a.n_tokens, a.seq_len)

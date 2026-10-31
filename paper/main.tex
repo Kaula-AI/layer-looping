@@ -36,16 +36,16 @@
 \noindent
 A pretrained transformer sends every token through every layer exactly once. We ask how much
 next-token loss is left on the table by that choice, and whether the right per-token change can
-be chosen \emph{before} the token is processed. For every token of a frozen Gemma-2-2B we compute
-the exact change in its next-token negative log-likelihood under 104 layer programs: repeat one
-layer $k$ times, skip one layer, swap two adjacent layers, or loop the block of layers 10--13. Only
+be chosen \emph{before} the token is processed. For every token of a frozen Gemma~4 E2B we compute
+the exact change in its next-token negative log-likelihood under 140 layer programs: repeat one
+layer $k$ times, skip one layer, swap two adjacent layers, or loop a four-layer mid block. Only
 that token's computation changes. From this per-token oracle we measure (i)~headroom by edit
 type and layer; (ii)~a signed-cost compute--accuracy frontier on which skips can pay for loops;
 (iii)~how much of that headroom a linear router recovers from the \emph{previous} token's
 internals, against a same-token router and training-free entropy- and norm-gated baselines from
 prior work; and (iv)~whether interpretable signals (logit-lens entropy and agreement, residual
-update norms, attention entropy, Gemma Scope SAE latents) carry that information as well as raw
-hidden states. We also measure how much of the per-token gain survives when routes are applied to
+update norms, attention entropy, and Gemma Scope SAE latents on Gemma-2-2B) carry that information
+as well as raw hidden states. We also measure how much of the per-token gain survives when routes are applied to
 whole sequences, where edited tokens change what later tokens attend to.
 \end{abstract}
 
@@ -66,7 +66,8 @@ would a small edit to its own layer schedule help, and is that predictable from 
 available before the token's forward pass? Our contributions:
 \begin{enumerate}
   \item \textbf{An exact per-token oracle} over repeat, skip, swap and block-loop programs in
-        Gemma-2-2B, computed for all positions in about one forward pass per program (\cref{sec:oracle}).
+        Gemma~4 E2B, computed for all positions in about one forward pass per program (\cref{sec:oracle}),
+        with Gemma-2-2B as a second model.
   \item \textbf{A signed-cost frontier} in which skips ($-1$) pay for repeats, against static
         programs and training-free baselines from prior work.
   \item \textbf{Routing from token $t-1$}, decided before token $t$'s pass, compared with a
@@ -81,11 +82,21 @@ available before the token's forward pass? Our contributions:
 \label{sec:oracle}
 
 \paragraph{Layer programs.}
-Gemma-2-2B has $L=26$ layers, applied in order $0,\dots,L-1$. A program $c$ is one edit to this
+Gemma~4 E2B has $L=35$ layers, applied in order $0,\dots,L-1$. A program $c$ is one edit to this
 schedule for a single token: \op{repeat}@$\ell$\,$\times k$ ($k\in\{2,3\}$, cost $k-1$),
-\op{skip}@$\ell$ (cost $-1$), \op{swap}@$\ell$ (run $\ell+1$ before $\ell$, cost $0$), plus the
-static block loop of layers 10--13 run twice, the best block reported by \citet{lys2026innerloop}
-(cost $4$). That is 104 programs. Cost counts extra layer applications.
+\op{skip}@$\ell$ (cost $-1$), \op{swap}@$\ell$ (run $\ell+1$ before $\ell$, cost $0$), plus a
+static block loop run twice (cost $4$): layers 13--16, the best Gemma-2-2B block reported by
+\citet{lys2026innerloop} (layers 10--13 of 26) moved to the same relative depth. That is 140
+programs (104 on Gemma-2-2B). Cost counts extra layer applications.
+
+\paragraph{Shared keys and values.}
+Layers 15--34 of E2B compute no keys or values of their own; each attends to those of layer 13 or
+14 (the last earlier layer of the same attention type). For the edited token we use its
+\emph{latest} key and value from that source layer, so an edit at layer 13 or 14 also changes
+what up to 20 later layers attend to; other tokens keep their base-pass ones. If the token's
+program has not run the source layer yet, its key and value are projected from its state where
+the program first passes that layer. Each layer also adds the token's own per-layer embedding
+wherever it runs; a skipped layer adds none.
 
 \paragraph{The diagonal swap.}
 We want token $t$'s next-token loss when only $t$ runs program $c$ and every other token runs
@@ -94,8 +105,9 @@ step of the program, a query attends to the \emph{base-pass} keys and values of 
 position at the layer being run, and to its \emph{own} modified key and value on the diagonal.
 This is exact for each token's own loss, at the cost of about one forward pass per program. It
 ignores the effect of $t$'s modified key and value on later tokens; \cref{sec:interaction}
-measures that separately. CPU tests on tiny random Gemma-2 models check that every oracle delta
-equals an independent recompute that truncates the sequence at $t$ and runs the program normally.
+measures that separately. CPU tests on tiny random Gemma-2 and Gemma~4 models (the latter with
+shared keys and values and per-layer embeddings) check that every oracle delta equals an
+independent recompute that truncates the sequence at $t$ and runs the program normally.
 
 \paragraph{Oracle and routers.}
 $\dnll_t(c) = \mathrm{NLL}_t(c) - \mathrm{NLL}_t(\text{base})$; negative means the edit helps. The
@@ -110,8 +122,9 @@ reads token $t-1$'s, which exist before $t$ is processed.
 \paragraph{Features and baselines.}
 Interpretable features are four per-layer groups: logit-lens~\citep{nostalgebraist2020logitlens}
 entropy, logit-lens agreement with the final prediction, relative residual-update norm, and
-attention entropy. We compare them with raw hidden states and with Gemma Scope
-SAE~\citep{lieberum2024gemmascope} latents at layers 6, 12 and 18. Training-free baselines: an
+attention entropy. We compare them with raw hidden states and, on Gemma-2-2B, with Gemma Scope
+SAE~\citep{lieberum2024gemmascope} latents at layers 6, 12 and 18 (no Gemma Scope SAEs exist for
+Gemma~4). Training-free baselines: an
 EGLR-like rule~\citep{bhattacharjee2026eglr} that repeats a top layer when next-token entropy is
 high (decided at $t$, or one token early), and a norm-peak rule~\citep{zhang2026telltale} that
 repeats the layer with the largest update norm.
@@ -221,7 +234,7 @@ depth with training.} ACT~\citep{graves2016act}, universal transformers~\citep{d
 CALM~\citep{schuster2022calm}, mixture-of-depths~\citep{raposo2024mod}.
 
 \section{Limitations}
-The oracle is a hindsight upper bound: it picks the best of 104 outcomes per token, which rewards
+The oracle is a hindsight upper bound: it picks the best of 140 outcomes per token, which rewards
 any edit that perturbs a wrong prediction. Per-token deltas ignore effects on later tokens; E5
 measures that gap. Routers are linear, the model is a single 2B checkpoint, and loss is measured
 with teacher forcing.

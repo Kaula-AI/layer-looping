@@ -27,9 +27,8 @@ class Cache:
         return 0 if self.k[0] is None else self.k[0].shape[2]
 
 
-def _attend(g, li, x, q, k, v, Kp, Vp):
+def _attend(g, li, x, q, k, v, Kp, Vp, cs):
     """One query position. Kp/Vp: cached K/V of earlier tokens (or None). Returns layer output, attn entropy."""
-    layer = g.layers[li]
     K = k if Kp is None else torch.cat([Kp, k], 2)
     V = v if Vp is None else torch.cat([Vp, v], 2)
     s = (q @ K.transpose(-1, -2)).float() * g.scale  # B,H,1,S
@@ -37,35 +36,56 @@ def _attend(g, li, x, q, k, v, Kp, Vp):
         s = torch.tanh(s / g.attn_cap) * g.attn_cap
     p = s.softmax(-1)
     o = (p.to(V.dtype) @ V).transpose(1, 2).reshape(x.shape[0], 1, -1)
-    h = x + layer.post_attention_layernorm(layer.self_attn.o_proj(o))
-    h = h + layer.post_feedforward_layernorm(layer.mlp(layer.pre_feedforward_layernorm(h)))
+    h = g.post(li, x, o, cs)
     ent = -(p * torch.log(p.clamp_min(1e-12))).sum(-1).mean(1)[:, 0]  # B
     return h, ent
+
+
+def _token_ctx(g, token, pos):
+    x = g.embed(token[:, None])
+    return x, g.context(token[:, None], x, torch.full((x.shape[0], 1), pos, device=x.device, dtype=torch.long))
+
+
+def _prior(cache, li, n):
+    """Earlier tokens' cached K/V at layer li (the first n entries), or None."""
+    if n == 0 or cache.k[li] is None:
+        return None, None
+    return cache.k[li][:, :, :n], cache.v[li][:, :, :n]
 
 
 @torch.no_grad()
 def step(g, cache, token, pos, route=(-1, 1), want_hs=False):
     """Run one token (B,) at position `pos` through the model with its route; update the cache.
-    Returns final hidden (B,1,d) and, if want_hs, per-layer states/attn entropies for features."""
+    Returns final hidden (B,1,d) and, if want_hs, per-layer states/attn entropies for features.
+    A K/V-shared layer (Gemma-4) reads its source layer's cache for earlier tokens and the token's
+    latest own K/V of the source."""
     L = len(g.layers)
-    x = g.embed(token[:, None])
-    cos, sin = g.rotary(x, torch.full((x.shape[0], 1), pos, device=x.device, dtype=torch.long))
+    x, cs = _token_ctx(g, token, pos)
+    n = len(cache)
     rl, rk = route
-    hs, ents = [x], []
+    hs, ents, latest = [x], [], {}
     for li in range(L):
-        layer = g.layers[li]
-        q, k, v = g.qkv(layer, x, cos, sin)
-        Kp, Vp = cache.k[li], cache.v[li]
-        cache.append(li, k, v)  # first pass writes the cache (also for a skipped layer)
+        sl = g.kv_src(li)
+        q, k, v = g.qkv(li, x, cs)
+        Kp, Vp = _prior(cache, sl, n)
+        if k is None:
+            k, v = latest[sl]
+        else:
+            cache.append(li, k, v)  # first pass writes the cache (also for a skipped layer)
+            latest[li] = (k, v)
         if li == rl and rk == 0:  # skip: residual unchanged
             ents.append(torch.zeros(x.shape[0], device=x.device))
             hs.append(x)
             continue
-        out, ent = _attend(g, li, x, q, k, v, Kp, Vp)
+        out, ent = _attend(g, li, x, q, k, v, Kp, Vp, cs)
         if li == rl and rk >= 2:
             for _ in range(rk - 1):
-                q2, k2, v2 = g.qkv(layer, out, cos, sin)
-                out, _ = _attend(g, li, out, q2, k2, v2, Kp, Vp)
+                q2, k2, v2 = g.qkv(li, out, cs)
+                if k2 is None:
+                    k2, v2 = latest[sl]
+                else:
+                    latest[li] = (k2, v2)
+                out, _ = _attend(g, li, out, q2, k2, v2, Kp, Vp, cs)
         x = out
         hs.append(x)
         ents.append(ent)
@@ -81,26 +101,36 @@ def step_path(g, cache, token, pos, path):
       - a layer the path never visits gets K/V projected from the token's state at the point where
         its path first reaches a layer with a higher index (or its final state), which reduces to
         "projected from its input" for a plain skip.
-    Each layer receives exactly one cache entry per token, so cache order stays aligned."""
+    Each layer with K/V receives exactly one cache entry per token, so cache order stays aligned.
+    A K/V-shared layer attends to its source's cache plus the token's latest own K/V of the source
+    (from its latest visit, else projected at the point its path first passed the source)."""
     L = len(g.layers)
-    x = g.embed(token[:, None])
-    cos, sin = g.rotary(x, torch.full((x.shape[0], 1), pos, device=x.device, dtype=torch.long))
+    x, cs = _token_ctx(g, token, pos)
     written = [False] * L
     seen_inputs = []  # (layer, input state) for every step
     pend = [None] * L  # this token's K/V per layer, appended at the end so earlier tokens see the cache unchanged
+    latest = {}
     for li in path:
-        layer = g.layers[li]
+        for s in g.kv_sources:
+            if s not in latest and li > s:
+                latest[s] = g.kv_of(s, x, cs)
         seen_inputs.append((li, x))
-        q, k, v = g.qkv(layer, x, cos, sin)
-        if not written[li]:
-            written[li] = True
-            pend[li] = (k, v)
-        x, _ = _attend(g, li, x, q, k, v, cache.k[li], cache.v[li])
+        sl = g.kv_src(li)
+        q, k, v = g.qkv(li, x, cs)
+        if k is None:
+            k, v = latest[sl]
+        else:
+            if not written[li]:
+                written[li] = True
+                pend[li] = (k, v)
+            latest[li] = (k, v)
+        x, _ = _attend(g, li, x, q, k, v, cache.k[sl], cache.v[sl], cs)
     for li in range(L):
+        if not g.has_kv(li):
+            continue
         if not written[li]:
             src = next((st for lj, st in seen_inputs if lj > li), x)
-            _, k, v = g.qkv(g.layers[li], src, cos, sin)
-            pend[li] = (k, v)
+            pend[li] = g.kv_of(li, src, cs)
         cache.append(li, *pend[li])
     return x
 

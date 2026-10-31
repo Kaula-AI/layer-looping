@@ -50,7 +50,7 @@ def test_decode_matches_routed_forward():
 
 @torch.no_grad()
 def test_no_route_matches_base_and_features():
-    ids = torch.randint(0, 97, (1, 9))
+    ids = torch.randint(0, 97, (1, 9), generator=torch.Generator().manual_seed(4))  # own RNG: test-order independent
     hs, _, attn_ent, _ = G.base_pass(ids)
     ent, agree, upd = G.lens_features(hs)
     feat_base = torch.cat([ent, agree, upd, attn_ent.float()], -1)[0]

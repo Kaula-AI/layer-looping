@@ -26,7 +26,7 @@ A pretrained transformer sends every token through every layer once. This projec
 
 **Part 2** takes this all the way. Each token gets its own path through the frozen layers: repeats, skips, swaps, reversed blocks and looped blocks, in any combination. Per-token search finds good paths, and a cheap controller learns to pick them. Think of it as depth recurrence where the model also chooses *which* layer to apply next.
 
-The model is `google/gemma-2-2b` and stays frozen; only small linear routers are trained. The headline result will be a compute–accuracy frontier: NLL saved against extra layer applications per token. Skips count as −1 layer, so they can pay for repeats.
+The model is `google/gemma-4-E2B` (Gemma-2-2B is the second model) and stays frozen; only small linear routers are trained. The headline result will be a compute–accuracy frontier: NLL saved against extra layer applications per token. Skips count as −1 layer, so they can pay for repeats.
 
 ## Method in one paragraph
 For each of 103 single-edit layer programs (plus a static block-loop baseline), `oracle.py` runs every position through that program at once. At each step, a position attends to the other positions' base-pass keys and values for the layer being run, plus its own current ones; we call this the *diagonal swap*. Because the model is causal and only that position changes, this gives its exact next-token loss under the edit in about one forward pass per program. `routed_eval.py` and `decode.py` then apply whole routes, so later tokens see the edits. The tests check that both paths agree.
@@ -34,11 +34,10 @@ For each of 103 single-edit layer programs (plus a static block-loop baseline), 
 ## Quickstart (one 24 GB GPU, e.g. RTX 4090)
 ```bash
 pip install -r requirements.txt
-huggingface-cli login                 # after accepting the Gemma-2 license
-python -m pytest -q tests             # CPU correctness tests (tiny random Gemma-2, no download)
+python -m pytest -q tests             # CPU correctness tests (tiny random Gemma-2 and Gemma-4, no download)
 bash run_experiments.sh quick         # E0-E4 on 20k tokens, ~15 min
 bash run_experiments.sh full          # E1-E6 on 200k tokens, ~2-3 h
-bash run_experiments.sh sae           # E4 SAE features (after full)
+bash run_experiments.sh sae           # E4 SAE features (Gemma-2-2B oracle only; needs HF login + Gemma-2 license)
 bash run_experiments.sh downstream    # E8 GSM8K at matched compute (after full)
 bash run_experiments.sh programs-quick  # E9-E12 per-token paths + controller, 20k tokens (~1 h)
 ```
@@ -47,15 +46,15 @@ See [`EXPERIMENTS.md`](EXPERIMENTS.md) for each experiment's question, hypothesi
 ## Layout
 | File | What it does |
 |---|---|
-| `oracle.py` | Manual Gemma-2 forward (`G2`), layer programs, oracle collection, `--check` (HF parity, swap identity, exactness vs independent recompute) |
+| `oracle.py` | Manual forwards for Gemma-4 (`G4`, with K/V sharing and per-layer embeddings) and Gemma-2 (`G2`), layer programs, oracle collection, `--check` (HF parity, swap identity, exactness vs independent recompute) |
 | `probe.py` | Headroom by op, λ sweep → Pareto fronts, budget-matched ΔNLL, same-token vs t−1 routers with bootstrap CIs, feature ablation, optional SAE routers |
 | `analyze_tokens.py` | Oracle gains by token type, next-token type, answer start, source, position, surprisal |
 | `routed_eval.py` | Whole-sequence routed evaluation; measures the interaction gap |
 | `decode.py` | Token-by-token decoding with per-token programs and a first-pass KV cache |
-| `sae_features.py` | Gemma Scope SAE latents for every oracle position (via `sae_lens`) |
+| `sae_features.py` | Gemma Scope SAE latents for every oracle position (via `sae_lens`; Gemma-2-2B only) |
 | `gsm8k_eval.py` | GSM8K greedy generation under base / static / router policies |
 | `programs.py` | Edit grammar on layer paths (repeat, skip, swap, reverse, loop) |
-| `search.py` | Per-token beam search over paths, using the mixed-path executor `G2.run_paths` |
+| `search.py` | Per-token beam search over paths, using the mixed-path executor `run_paths` |
 | `library.py` | Shared path library, scored exactly for every token |
 | `controller.py` | Cheap MLP controller vs oracles and baselines |
 | `program_eval.py` | Whole-sequence routing with arbitrary per-token paths |

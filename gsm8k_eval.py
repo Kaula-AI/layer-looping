@@ -26,13 +26,13 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from decode import Cache, step, token_features
-from oracle import G2
+from oracle import make_g
 from routed_eval import lens_features, parse_program, routed_forward
 
 
 def get_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="google/gemma-2-2b")
+    p.add_argument("--model", default="google/gemma-4-E2B")
     p.add_argument("--policy", choices=["base", "static", "router"], default="base")
     p.add_argument("--program", default="repeat@13x2")
     p.add_argument("--lam", type=float, default=0.0)
@@ -127,7 +127,7 @@ def main():
     tok = AutoTokenizer.from_pretrained(a.model)
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
-    g = G2(model)
+    g = make_g(model)
     pol = Policy(a, len(g.layers), dev)
     train = load_dataset("openai/gsm8k", "main", split="train")
     test = load_dataset("openai/gsm8k", "main", split="test").select(range(a.n_problems))

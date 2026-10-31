@@ -1,5 +1,6 @@
 """
-Per-token single-edit layer-program oracle for Gemma-2-2B (repeat, skip, swap).
+Per-token single-edit layer-program oracle for a frozen Gemma model (repeat, skip, swap).
+Default model: Gemma-4 E2B (G4); Gemma-2-2B (G2) is still supported.
 
 For every position t and every single-edit program (repeat layer l k times, skip layer l,
 or swap layers l and l+1) this measures the change
@@ -35,19 +36,20 @@ import torch
 import torch.nn.functional as F
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.models.gemma2.modeling_gemma2 import apply_rotary_pos_emb, rotate_half
+from transformers.models.gemma2.modeling_gemma2 import rotate_half
 
 
 def get_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="google/gemma-2-2b")
+    p.add_argument("--model", default="google/gemma-4-E2B")
     p.add_argument("--seq_len", type=int, default=512)
     p.add_argument("--batch", type=int, default=4)
     p.add_argument("--n_tokens", type=int, default=500_000)
     p.add_argument("--ops", nargs="+", default=["repeat", "skip", "swap"], choices=["repeat", "skip", "swap"])
     p.add_argument("--repeats", type=int, nargs="+", default=[2, 3])
-    p.add_argument("--blocks", nargs="*", default=["10-13x2"],
-                   help="static block-loop programs S-ExR (default: Inner Loop Inference's Gemma-2-2B range)")
+    p.add_argument("--blocks", nargs="*", default=None,
+                   help="static block-loop programs S-ExR (default: Inner Loop Inference's Gemma-2-2B range "
+                        "10-13x2, scaled to the model's depth)")
     p.add_argument("--layers", type=int, nargs="*", default=None, help="layers to edit (default: all)")
     p.add_argument("--raw_layer", type=int, default=None, help="residual index saved for raw probe (default: L//2)")
     p.add_argument("--out", default="oracle_out")
@@ -94,7 +96,17 @@ def make_chunks(tok, n_tokens, seq_len):
 
 # ---------------------------------------------------------------- model
 class G2:
-    """Manual Gemma-2 forward that exposes per-layer K/V and supports the diagonal swap."""
+    """Manual Gemma-2 forward that exposes per-layer K/V and supports the diagonal swap.
+
+    Architecture hooks, overridden by G4: context / ctx_rows (rotary + any per-token inputs),
+    _heads (q, k, v projections), post (everything after attention), kv_src (which layer's K/V a
+    layer attends to). `cs` is the opaque per-sequence context returned by `context`.
+
+    K/V sharing (G4): a shared layer attends to the K/V of its source layer. For the token being
+    edited, its own K/V there is the one from its LATEST visit to the source layer; if its path has
+    not visited the source yet, it is projected from the token's state when its path first reaches a
+    layer with a higher index (for a plain skip of the source: from the source's input). The same
+    rule writes decode.py's cache for unvisited layers, so all executors agree."""
 
     def __init__(self, model):
         self.model = model
@@ -110,8 +122,51 @@ class G2:
         self.final_cap = c.final_logit_softcapping
         self.rotary = getattr(self.m, "rotary_emb", None)
         assert self.rotary is not None, "needs transformers>=4.48 (model-level rotary_emb)"
+        self.src = list(range(len(self.layers)))  # layer whose K/V each layer attends to
+        self.kv_sources = []  # layers whose K/V other layers share
         self._masks = {}
 
+    # ---- architecture hooks
+    def kv_src(self, li):
+        return self.src[li]
+
+    def has_kv(self, li):
+        return self.src[li] == li
+
+    def context(self, ids, h=None, pos=None):
+        """Per-sequence context for ids (B, T) at positions pos (default 0..T-1): here (cos, sin)."""
+        if pos is None:
+            pos = torch.arange(ids.shape[1], device=ids.device).unsqueeze(0).expand(ids.shape[0], -1)
+        if h is None:
+            h = self.embed(ids)
+        return self.rotary(h, pos)
+
+    def ctx_rows(self, cs, b_idx, t_idx):
+        return cs[0][b_idx, t_idx], cs[1][b_idx, t_idx]
+
+    def _heads(self, li, x, cs):
+        """x (*S, d) with context of shape (*S, ...). Returns q, k, v (*S, H, hd), K/V repeated to all heads."""
+        layer = self.layers[li]
+        a = layer.self_attn
+        cos, sin = cs
+        S = x.shape[:-1]
+        h = layer.input_layernorm(x)
+        q = a.q_proj(h).view(*S, self.nH, self.hd)
+        k = a.k_proj(h).view(*S, self.nKV, self.hd)
+        v = a.v_proj(h).view(*S, self.nKV, self.hd)
+        cu, su = cos.unsqueeze(-2), sin.unsqueeze(-2)
+        q = q * cu + rotate_half(q) * su
+        k = k * cu + rotate_half(k) * su
+        rep = self.nH // self.nKV  # same head layout as HF repeat_kv
+        return q, k.repeat_interleave(rep, -2), v.repeat_interleave(rep, -2)
+
+    def post(self, li, x, o, cs):
+        """Layer output from its input x and the attention output o (*S, H*hd)."""
+        layer = self.layers[li]
+        h = x + layer.post_attention_layernorm(layer.self_attn.o_proj(o))
+        return h + layer.post_feedforward_layernorm(layer.mlp(layer.pre_feedforward_layernorm(h)))
+
+    # ----
     def causal(self, T, dev):
         key = (T, str(dev))
         if key not in self._masks:
@@ -130,23 +185,24 @@ class G2:
             x = torch.tanh(x / self.final_cap) * self.final_cap
         return x
 
-    def qkv(self, layer, x, cos, sin):
-        a = layer.self_attn
-        B, T, _ = x.shape
-        h = layer.input_layernorm(x)
-        q = a.q_proj(h).view(B, T, self.nH, self.hd).transpose(1, 2)
-        k = a.k_proj(h).view(B, T, self.nKV, self.hd).transpose(1, 2)
-        v = a.v_proj(h).view(B, T, self.nKV, self.hd).transpose(1, 2)
-        q, k = apply_rotary_pos_emb(q, k, cos, sin)
-        rep = self.nH // self.nKV  # same head layout as HF repeat_kv
-        return q, k.repeat_interleave(rep, 1), v.repeat_interleave(rep, 1)
+    def qkv(self, li, x, cs):
+        """x (B, T, d). Returns q, k, v (B, H, T, hd); k, v are None for a K/V-shared layer."""
+        q, k, v = self._heads(li, x, cs)
+        tr = lambda t: None if t is None else t.transpose(1, 2)  # noqa: E731
+        return tr(q), tr(k), tr(v)
 
-    def layer(self, li, x, cos, sin, base_kv=None, want_entropy=False):
+    def kv_of(self, li, x, cs):
+        _, k, v = self.qkv(li, x, cs)
+        return k, v
+
+    def layer(self, li, x, cs, base_kv=None, own_kv=None, want_entropy=False):
         """One decoder layer. If base_kv is given, each query attends to base K/V
-        for every other position and to its own (modified) K/V on the diagonal."""
-        layer = self.layers[li]
+        for every other position and to its own (modified) K/V on the diagonal.
+        own_kv: the positions' own K/V for a K/V-shared layer (B, H, T, hd)."""
         B, T, _ = x.shape
-        q, k, v = self.qkv(layer, x, cos, sin)
+        q, k, v = self.qkv(li, x, cs)
+        if k is None:
+            k, v = own_kv
         K, V = (k, v) if base_kv is None else base_kv
         s = (q @ K.transpose(-1, -2)).float() * self.scale  # B,H,T,T
         if base_kv is not None:
@@ -160,24 +216,22 @@ class G2:
         if base_kv is not None:
             o = o + p[..., idx, idx].to(V.dtype).unsqueeze(-1) * (v - V)
         o = o.transpose(1, 2).reshape(B, T, -1)
-        h = x + layer.post_attention_layernorm(layer.self_attn.o_proj(o))
-        h = h + layer.post_feedforward_layernorm(layer.mlp(layer.pre_feedforward_layernorm(h)))
+        h = self.post(li, x, o, cs)
         ent = -(p * torch.log(p.clamp_min(1e-12))).sum(-1).mean(1) if want_entropy else None  # B,T
         return h, (k, v), ent
 
     @torch.no_grad()
     def base_pass(self, ids):
-        B, T = ids.shape
-        pos = torch.arange(T, device=ids.device).unsqueeze(0).expand(B, -1)
         h = self.embed(ids)
-        cos, sin = self.rotary(h, pos)
+        cs = self.context(ids, h)
         hs, kvs, ents = [h], [], []
         for li in range(len(self.layers)):
-            h, kv, ent = self.layer(li, h, cos, sin, want_entropy=True)
+            own = None if self.has_kv(li) else kvs[self.kv_src(li)]
+            h, kv, ent = self.layer(li, h, cs, own_kv=own, want_entropy=True)
             hs.append(h)
-            kvs.append(kv)
+            kvs.append(kv)  # a shared layer's entry is its source's K/V
             ents.append(ent)
-        return hs, kvs, torch.stack(ents, -1), (cos, sin)  # hs[l] = input to layer l
+        return hs, kvs, torch.stack(ents, -1), cs  # hs[l] = input to layer l
 
     @torch.no_grad()
     def run_program(self, hs, kvs, cs, seq):
@@ -185,34 +239,34 @@ class G2:
         0..L-1 with a layer repeated, dropped or two layers swapped). At each step a position
         attends to the other positions' BASE-pass K/V of the layer being run, plus its own
         current K/V (diagonal swap). Exact for each position's own next-token loss."""
-        cos, sin = cs
         d = 0  # first step where the program leaves the base order
         while d < len(seq) and d < len(self.layers) and seq[d] == d:
             d += 1
         x = hs[d]
+        latest = {s: kvs[s] for s in self.kv_sources if s < d}  # own K/V of shared-source layers
         for li in seq[d:]:
-            x, _, _ = self.layer(li, x, cos, sin, base_kv=kvs[li])
+            for s in self.kv_sources:
+                if s not in latest and li > s:
+                    latest[s] = self.kv_of(s, x, cs)
+            own = None if self.has_kv(li) else latest[self.kv_src(li)]
+            x, kv, _ = self.layer(li, x, cs, base_kv=kvs[li], own_kv=own)
+            if li in self.kv_sources:
+                latest[li] = kv
         return x
 
-    def layer_rows(self, li, x, b_idx, t_idx, cs, base_kv):
+    def layer_rows(self, li, x, b_idx, t_idx, cs, base_kv, own_kv=None):
         """Run layer li for a SUBSET of positions (rows) only. x: (n, d) states of those positions,
         at (b_idx, t_idx). Each row attends to the base-pass K/V of layer li for every other position
-        of its own sequence (causal) and to its own current K/V on the diagonal. Returns (n, d)."""
-        layer = self.layers[li]
-        a = layer.self_attn
-        cos, sin = cs[0][b_idx, t_idx], cs[1][b_idx, t_idx]  # (n, hd)
+        of its own sequence (causal) and to its own current K/V on the diagonal (own_kv for a K/V-shared
+        layer: (n, H, hd) each). Returns (n, d) and the rows' own (k, v)."""
+        cr = self.ctx_rows(cs, b_idx, t_idx)
         n = x.shape[0]
-        h = layer.input_layernorm(x)
-        q = a.q_proj(h).view(n, self.nH, self.hd)
-        k = a.k_proj(h).view(n, self.nKV, self.hd)
-        v = a.v_proj(h).view(n, self.nKV, self.hd)
-        q = q * cos[:, None] + rotate_half(q) * sin[:, None]
-        k = k * cos[:, None] + rotate_half(k) * sin[:, None]
-        rep = self.nH // self.nKV
-        k, v = k.repeat_interleave(rep, 1), v.repeat_interleave(rep, 1)  # (n, H, hd)
+        q, k, v = self._heads(li, x, cr)  # (n, H, hd)
+        if k is None:
+            k, v = own_kv
         K, V = base_kv  # (B, H, T, hd)
         T = K.shape[2]
-        o = torch.empty(n, self.nH, self.hd, device=x.device, dtype=v.dtype)
+        o = torch.empty(n, self.nH, V.shape[-1], device=x.device, dtype=v.dtype)
         for b in torch.unique(b_idx).tolist():  # group rows by sequence: no (n, H, T, hd) gather
             r = (b_idx == b).nonzero(as_tuple=True)[0]
             tr = t_idx[r]
@@ -225,9 +279,7 @@ class G2:
             p = s.softmax(-1)
             ob = torch.einsum("nht,htd->nhd", p.to(V.dtype), V[b])
             o[r] = ob + p[ar, :, tr].to(v.dtype).unsqueeze(-1) * (v[r] - V[b][:, tr].transpose(0, 1))
-        o = o.reshape(n, -1)
-        h2 = x + layer.post_attention_layernorm(a.o_proj(o))
-        return h2 + layer.post_feedforward_layernorm(layer.mlp(layer.pre_feedforward_layernorm(h2)))
+        return self.post(li, x, o.reshape(n, -1), cr), (k, v)
 
     @torch.no_grad()
     def run_paths(self, hs, kvs, cs, paths, chunk_rows=1024):
@@ -245,16 +297,32 @@ class G2:
         bi = torch.arange(B, device=dev)[:, None].expand(B, T)
         ti = torch.arange(T, device=dev)[None, :].expand(B, T)
         x = H[d, bi, ti]  # (B, T, dm)
+        # own K/V of shared-source layers per position (B, T, H, hd), and whether it is set yet
+        lk = {s: kvs[s][0].transpose(1, 2).clone() for s in self.kv_sources}
+        lv = {s: kvs[s][1].transpose(1, 2).clone() for s in self.kv_sources}
+        have = {s: d > s for s in self.kv_sources}
         for st in range(S):
             lid = paths[..., st]
             active = (st >= d) & (lid >= 0)
             if not active.any():
                 continue
+            for s in self.kv_sources:
+                need = (active & (lid > s) & ~have[s]).nonzero(as_tuple=False)
+                if len(need):
+                    _, k, v = self._heads(s, x[need[:, 0], need[:, 1]], self.ctx_rows(cs, need[:, 0], need[:, 1]))
+                    lk[s][need[:, 0], need[:, 1]], lv[s][need[:, 0], need[:, 1]] = k, v
+                    have[s][need[:, 0], need[:, 1]] = True
             for li in torch.unique(lid[active]).tolist():
                 rows = (active & (lid == li)).nonzero(as_tuple=False)
+                sl = self.kv_src(li)
                 for r0 in range(0, len(rows), chunk_rows):
                     rr = rows[r0 : r0 + chunk_rows]
-                    x[rr[:, 0], rr[:, 1]] = self.layer_rows(li, x[rr[:, 0], rr[:, 1]], rr[:, 0], rr[:, 1], cs, kvs[li])
+                    b_, t_ = rr[:, 0], rr[:, 1]
+                    own = None if sl == li else (lk[sl][b_, t_], lv[sl][b_, t_])
+                    x[b_, t_], (k, v) = self.layer_rows(li, x[b_, t_], b_, t_, cs, kvs[li], own)
+                    if li in self.kv_sources:
+                        lk[li][b_, t_], lv[li][b_, t_] = k, v
+                        have[li][b_, t_] = True
         return x
 
     def repeat_pass(self, hs, kvs, cs, l, k):
@@ -266,11 +334,23 @@ class G2:
         """Exactness reference, independent of the diagonal-swap code path: truncate sequence b
         at position t and run each layer of `seq` normally on [other positions' base inputs to
         that layer] + [token t's current state]. Returns token t's next-token NLL."""
-        pos = torch.arange(t + 1, device=ids.device).unsqueeze(0)
-        cos, sin = self.rotary(hs[0][b : b + 1, : t + 1], pos)
+        cs = self.context(ids[b : b + 1, : t + 1])
         x = hs[0][b : b + 1, t : t + 1]
+        latest = {}  # token t's own K/V (1, H, 1, hd) of shared-source layers
         for li in seq:
-            out, _, _ = self.layer(li, torch.cat([hs[li][b : b + 1, :t], x], 1), cos, sin)
+            inp = torch.cat([hs[li][b : b + 1, :t], x], 1)
+            for s in self.kv_sources:
+                if s not in latest and li > s:
+                    k, v = self.kv_of(s, torch.cat([hs[s][b : b + 1, :t], x], 1), cs)
+                    latest[s] = k[:, :, -1:], v[:, :, -1:]
+            own = None
+            if not self.has_kv(li):
+                sl = self.kv_src(li)
+                ko, vo = self.kv_of(sl, hs[sl][b : b + 1, : t + 1], cs)  # others: base K/V of the source
+                own = torch.cat([ko[:, :, :t], latest[sl][0]], 2), torch.cat([vo[:, :, :t], latest[sl][1]], 2)
+            out, (k, v), _ = self.layer(li, inp, cs, own_kv=own)
+            if li in self.kv_sources:
+                latest[li] = k[:, :, -1:], v[:, :, -1:]
             x = out[:, -1:]
         return F.cross_entropy(self.logits(x)[0], ids[b, t + 1 : t + 2])
 
@@ -302,6 +382,86 @@ class G2:
         return ent, agree, upd
 
 
+class G4(G2):
+    """Manual Gemma-4 text forward (dense E2B / E4B). Differences from Gemma-2 handled here:
+      - sliding and full attention layers with their own head dims and rotary tables;
+      - q/k/v RMS norms, attention scaling 1.0, no attention-logit soft-capping;
+      - per-layer embeddings (PLE): layer l always receives the token's own PLE slice l, wherever
+        layer l appears in a path, and a skipped layer adds none;
+      - the last num_kv_shared_layers layers have no K/V projections and attend to the K/V of the
+        last earlier layer of the same attention type (see G2's docstring for the edited-token rule);
+      - a per-layer output scalar.
+    Accepts Gemma4ForConditionalGeneration (what AutoModelForCausalLM loads) or Gemma4ForCausalLM."""
+
+    def __init__(self, model):
+        self.model = model
+        self.m = getattr(model.model, "language_model", model.model)
+        self.cfg = self.m.config
+        self.layers = self.m.layers
+        self.norm = self.m.norm
+        self.lm_head = model.lm_head
+        c = self.cfg
+        assert not c.enable_moe_block and not c.attention_k_eq_v, "only dense Gemma-4 (E2B/E4B) is supported"
+        self.nH = c.num_attention_heads
+        self.scale = 1.0
+        self.attn_cap = None
+        self.final_cap = c.final_logit_softcapping
+        self.rotary = self.m.rotary_emb
+        self.types = list(c.layer_types)
+        store = {self.types[i]: i for i, l_ in enumerate(self.layers) if l_.self_attn.store_full_length_kv}
+        self.src = [store[self.types[i]] if l_.self_attn.is_kv_shared_layer else i for i, l_ in enumerate(self.layers)]
+        self.kv_sources = sorted({s for i, s in enumerate(self.src) if s != i})
+        self._masks = {}
+
+    def context(self, ids, h=None, pos=None):
+        if pos is None:
+            pos = torch.arange(ids.shape[1], device=ids.device).unsqueeze(0).expand(ids.shape[0], -1)
+        if h is None:
+            h = self.embed(ids)
+        cs = {t: self.rotary(h, pos, t) for t in set(self.types)}
+        if self.cfg.hidden_size_per_layer_input:
+            cs["ple"] = self.m.project_per_layer_inputs(h, self.m.get_per_layer_inputs(ids, h))  # B,T,L,P
+        return cs
+
+    def ctx_rows(self, cs, b_idx, t_idx):
+        return {k: v[b_idx, t_idx] if k == "ple" else (v[0][b_idx, t_idx], v[1][b_idx, t_idx]) for k, v in cs.items()}
+
+    def _heads(self, li, x, cs):
+        layer = self.layers[li]
+        a = layer.self_attn
+        cos, sin = cs[self.types[li]]
+        S = x.shape[:-1]
+        h = layer.input_layernorm(x)
+        cu, su = cos.unsqueeze(-2), sin.unsqueeze(-2)
+        q = a.q_norm(a.q_proj(h).view(*S, self.nH, a.head_dim))
+        q = q * cu + rotate_half(q) * su
+        if a.is_kv_shared_layer:
+            return q, None, None
+        k = a.k_norm(a.k_proj(h).view(*S, -1, a.head_dim))
+        v = a.v_norm(a.v_proj(h).view(*S, -1, a.head_dim))
+        k = k * cu + rotate_half(k) * su
+        rep = self.nH // k.shape[-2]
+        return q, k.repeat_interleave(rep, -2), v.repeat_interleave(rep, -2)
+
+    def post(self, li, x, o, cs):
+        layer = self.layers[li]
+        h = x + layer.post_attention_layernorm(layer.self_attn.o_proj(o))
+        h = h + layer.post_feedforward_layernorm(layer.mlp(layer.pre_feedforward_layernorm(h)))
+        if layer.hidden_size_per_layer_input:
+            g_ = layer.act_fn(layer.per_layer_input_gate(h)) * cs["ple"][..., li, :]
+            h = h + layer.post_per_layer_input_norm(layer.per_layer_projection(g_))
+        return h * layer.layer_scalar
+
+
+def make_g(model):
+    """Manual forward for a loaded HF model: G4 for Gemma-4, G2 for Gemma-2."""
+    mt = model.config.model_type
+    if mt.startswith("gemma4"):
+        return G4(model)
+    assert mt == "gemma2", f"unsupported model type {mt!r}"
+    return G2(model)
+
+
 @torch.no_grad()
 def base_records(g, ids, raw_layer):
     """Base pass plus the per-position records every collection script saves (positions 0..T-2)."""
@@ -326,6 +486,13 @@ def feat_names(L):
 
 
 # ---------------------------------------------------------------- programs
+def default_block(L):
+    """Inner Loop Inference's best Gemma-2-2B block (layers 10-13 of 26, x2): same 4-layer length,
+    start scaled to depth L. Gemma-4 E2B (35 layers): 13-16x2; no published best block exists for Gemma-4."""
+    s = round(10 * L / 26)
+    return f"{s}-{s + 3}x2"
+
+
 def build_programs(L, ops=("repeat", "skip", "swap"), repeats=(2, 3), layers=None, blocks=()):
     """Single-edit layer programs. Returns a list of dicts: op, layer, end, k, cost, seq.
     cost = layer applications relative to base (repeat k: k-1, skip: -1, swap: 0,
@@ -354,7 +521,7 @@ def build_programs(L, ops=("repeat", "skip", "swap"), repeats=(2, 3), layers=Non
 @torch.no_grad()
 def run_check(g, model, ids):
     hf = model(ids).logits.float()
-    hs, kvs, _, (cos, sin) = g.base_pass(ids)
+    hs, kvs, _, cs = g.base_pass(ids)
     mine = g.logits(hs[-1])
     print(f"manual vs HF logits: max|diff| {(hf - mine).abs().max().item():.4f} "
           f"(logit scale {hf.abs().max().item():.1f}); "
@@ -362,14 +529,17 @@ def run_check(g, model, ids):
     L = len(g.layers)
     x = hs[L // 2]
     for li in range(L // 2, L):
-        x, _, _ = g.layer(li, x, cos, sin, base_kv=kvs[li])
+        x, _, _ = g.layer(li, x, cs, base_kv=kvs[li], own_kv=None if g.has_kv(li) else kvs[g.kv_src(li)])
     print(f"diagonal-swap identity max|dh|: {(x - hs[-1]).abs().max().item():.6f} (should be ~0)")
-    # exactness of oracle deltas vs an independent recompute, ~5 positions x 3 ops
+    # exactness of oracle deltas vs an independent recompute, ~5 positions x a few ops, including
+    # edits of K/V-source layers and of the first K/V-shared layer (Gemma-4)
     base = g.nll(hs[-1], ids)
     B, T = ids.shape
     worst = 0.0
-    for pr in [p_ for p_ in build_programs(L) if p_["layer"] in (L // 3, L // 2, 2 * L // 3)][::2]:
-        d_all = g.nll(g.run_program(hs, kvs, (cos, sin), pr["seq"]), ids) - base
+    shared = [li for li in range(L) if not g.has_kv(li)]
+    check_layers = {L // 3, L // 2, 2 * L // 3} | set(g.kv_sources) | set(shared[:1])
+    for pr in [p_ for p_ in build_programs(L) if p_["layer"] in check_layers][::2]:
+        d_all = g.nll(g.run_program(hs, kvs, cs, pr["seq"]), ids) - base
         for t, b in [(3, 0), (T // 4, 0), (T // 2, B - 1), (T - 2, B - 1), (T // 3, 0)]:
             ref = g.independent_program_nll(hs, ids, pr["seq"], t, b) - base[b, t]
             worst = max(worst, abs(d_all[b, t].item() - ref.item()))
@@ -385,13 +555,14 @@ def main():
     model = AutoModelForCausalLM.from_pretrained(
         a.model, torch_dtype=torch.bfloat16, attn_implementation="eager"
     ).to(dev).eval()
-    g = G2(model)
-    sw = getattr(model.config, "sliding_window", None)
-    assert sw is None or a.seq_len <= sw, "seq_len must fit inside Gemma-2's sliding window"
+    g = make_g(model)
+    sw = getattr(g.cfg, "sliding_window", None)
+    assert sw is None or a.seq_len <= sw, "seq_len must fit inside the sliding window"
 
     L = len(g.layers)
     layers = a.layers if a.layers else list(range(L))
-    blocks = [tuple(int(v) for v in re.fullmatch(r"(\d+)-(\d+)x(\d+)", b_).groups()) for b_ in a.blocks]
+    blocks = [tuple(int(v) for v in re.fullmatch(r"(\d+)-(\d+)x(\d+)", b_).groups())
+              for b_ in (a.blocks if a.blocks is not None else [default_block(L)])]
     progs = build_programs(L, a.ops, a.repeats, layers, blocks)
     raw_layer = a.raw_layer if a.raw_layer is not None else L // 2
 
