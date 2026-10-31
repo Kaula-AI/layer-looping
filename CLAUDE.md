@@ -120,7 +120,8 @@ first pass; a skipped token's K/V at ℓ are still projected from its input) and
 
 ## Status
 All code paths are written and pass the CPU tests, for Gemma-2 and Gemma-4. Ported to Gemma-4 E2B on 2026-10-31.
-No experiment has run on either model yet: there are no results.
+Quick run on E2B done 2026-10-31 (`results/gemma-4-e2b-quick/`, summary in `EXPERIMENTS.md`): large oracle
+headroom, but no router or heuristic beats no-edit. Awaiting the human's decision before `full`.
 
 ## Tasks, in order
 Follow `EXPERIMENTS.md`. Concretely:
