@@ -20,6 +20,8 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 
 `--check` also compares oracle deltas with an independent recompute on the real model (5 positions × a few ops, including edits of the K/V-source layers and the first K/V-shared layer).
 
+**Measured on E2B, bf16, Apple MPS, 2×128 tokens (2026-10-31).** Manual vs HF: argmax 0.984, and every flip is an exact bf16 tie. For comparison, HF eager vs HF sdpa agree on argmax only 0.980. Swap identity: 0.5 at hidden-state size ~62, one bf16 rounding step. The independent recompute of the *unedited* program differs from the base pass by up to 0.11 nats (mean per-token NLL vs HF: 0.02). Oracle-vs-independent errors (0.02–0.12 nats) sit at that floor. **Implication:** per-token bf16 noise is the same order as the 0.05-nat "helped" threshold. On the pod, re-measure the floor and report it next to E1. If it holds, either raise the threshold or run the oracle's small-effect programs in float32 (fp32 E2B is ~20 GB; keep the per-layer embedding table in bf16 to fit 24 GB).
+
 ## E1 Headroom by op (the go/no-go, ~$1 quick, ~$2 full)
 **Question.** How much does the best single edit help each token? Which ops and layers win, and how often is a skip free?
 **Hypotheses.**
