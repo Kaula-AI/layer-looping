@@ -1,0 +1,3 @@
+manual vs HF logits: max|diff| 0.1220 (logit scale 30.0); argmax agreement 0.9897
+diagonal-swap identity max|dh|: 0.625000 (should be ~0)
+oracle vs independent recompute: max|d dNLL| 0.1806 nats (bf16; should be << typical |dNLL|)
