@@ -1,0 +1,77 @@
+{
+ "arc_challenge|base": {
+  "n": 500,
+  "acc": 0.474,
+  "acc_norm": 0.48,
+  "acc_ci": [
+   0.43,
+   0.52
+  ],
+  "acc_norm_ci": [
+   0.436,
+   0.526
+  ],
+  "layers_per_answer_token": 96.0,
+  "minutes": 140.1653431892395
+ },
+ "arc_challenge|router:0": {
+  "n": 500,
+  "acc": 0.45,
+  "acc_norm": 0.476,
+  "acc_ci": [
+   0.406,
+   0.496
+  ],
+  "acc_norm_ci": [
+   0.432,
+   0.52
+  ],
+  "layers_per_answer_token": 96.38712694498767,
+  "minutes": 140.16565967003504
+ },
+ "arc_challenge|shuffled:0": {
+  "n": 500,
+  "acc": 0.458,
+  "acc_norm": 0.484,
+  "acc_ci": [
+   0.412,
+   0.50605
+  ],
+  "acc_norm_ci": [
+   0.44,
+   0.53
+  ],
+  "layers_per_answer_token": 96.38712694498767,
+  "minutes": 140.16608682076136
+ },
+ "arc_challenge|router:0.001": {
+  "n": 500,
+  "acc": 0.452,
+  "acc_norm": 0.472,
+  "acc_ci": [
+   0.408,
+   0.49609999999999993
+  ],
+  "acc_norm_ci": [
+   0.426,
+   0.51605
+  ],
+  "layers_per_answer_token": 96.14718136212907,
+  "minutes": 140.16637752453485
+ },
+ "arc_challenge|shuffled:0.001": {
+  "n": 500,
+  "acc": 0.456,
+  "acc_norm": 0.488,
+  "acc_ci": [
+   0.41,
+   0.50205
+  ],
+  "acc_norm_ci": [
+   0.444,
+   0.53205
+  ],
+  "layers_per_answer_token": 96.14718136212907,
+  "minutes": 140.16668473084766
+ }
+}

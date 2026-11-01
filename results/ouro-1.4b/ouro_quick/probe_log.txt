@@ -1,0 +1,51 @@
+== E1 Oracle headroom ==
+  positions: 20440
+  base_nll: 1.7879544496536255
+  oracle_nll_reduction: 0.6358348727226257
+  oracle_pct_of_base: 35.56214141845703
+  frac_helped: 0.7093933463796478
+  best_static: {'program': 'swap@20', 'mean_dnll': 0.0001316238340223208}
+  frac_tokens_with_safe_skip: 1.0
+  [repeat] gain if restricted: 0.5429  best-op share: 30.8%  best static: repeat@11x2
+  [skip] gain if restricted: 0.4718  best-op share: 30.4%  best static: skip@20
+  [swap] gain if restricted: 0.3658  best-op share: 7.6%  best static: swap@20
+  [block] gain if restricted: 0.0397  best-op share: 0.0%  best static: block@72-95x2
+  [exit] gain if restricted: 0.1597  best-op share: 2.2%  best static: exit@71
+
+== E2/E3 Routers on held-out chunks (lambda = 0) ==
+  oracle:      -0.6038
+  best static: +0.0017  (swap@20, chosen on train)
+  features                     dNLL              95% CI    AUC  edit%  +layers  ops used
+  same_interp               +0.0731 [+0.0529,+0.0960]  0.404 100.0%   -5.786  repeat:53% skip:28% swap:9% block:0% exit:11%
+  lag_interp                +0.0569 [+0.0457,+0.0697]  0.445 100.0%   -0.577  repeat:58% skip:31% swap:8% block:0% exit:2%
+  lag_interp_surprisal      +0.0597 [+0.0406,+0.0761]  0.450 100.0%   -0.903  repeat:57% skip:31% swap:8% block:0% exit:3%
+  same_raw                  +0.1391 [+0.0897,+0.1925]  0.470 100.0%   -3.549  repeat:57% skip:26% swap:10% block:0% exit:7%
+  lag_raw                   +0.2281 [+0.1702,+0.2733]  0.515 100.0%   -2.339  repeat:59% skip:27% swap:9% block:0% exit:5%
+
+== Prior-work heuristic baselines (training-free) ==
+  rule_entropy_same        best dNLL +0.0000 at +0.000 layers (threshold quantile None)
+  rule_entropy_lag         best dNLL +0.0000 at +0.000 layers (threshold quantile None)
+  rule_normpeak_same       best dNLL -0.0001 at +0.017 layers (threshold quantile 0.98)
+  (entropy rules repeat repeat@92x2, the best top-4-layer repeat on train)
+
+== E2 Budget-matched dNLL (best frontier point with <= budget extra layers/token) ==
+                              -1.00    -0.50    +0.00    +0.25    +0.50
+  oracle                    -0.6038  -0.6038  -0.6038  -0.6038  -0.6038
+  same_interp               +0.0693  +0.0693  +0.0000  +0.0000  +0.0000
+  lag_interp                +0.0585  +0.0569  +0.0000  +0.0000  +0.0000
+  lag_interp_surprisal      +0.0614  +0.0597  +0.0000  +0.0000  +0.0000
+  same_raw                  +0.1387  +0.1387  +0.0000  +0.0000  +0.0000
+  lag_raw                   +0.2281  +0.2281  +0.0000  +0.0000  +0.0000
+  rule_entropy_same               —        —  +0.0000  +0.0000  +0.0000
+  rule_entropy_lag                —        —  +0.0000  +0.0000  +0.0000
+  rule_normpeak_same              —        —  +0.0000  -0.0001  -0.0001
+
+  E3 lag recovery (t-1 interp / same-token interp at lambda=0): None
+
+== E4 Lagged interp feature groups (lambda = 0) ==
+  lens_ent                  +0.0273  +layers +0.250
+  lens_agree                +0.0331  +layers +0.822
+  upd_norm                  +0.0338  +layers -0.367
+  attn_ent                  +0.0289  +layers -0.655
+
+saved ouro_quick/frontier.png and results.json

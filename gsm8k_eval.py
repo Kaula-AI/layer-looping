@@ -23,7 +23,8 @@ import time
 import numpy as np
 import torch
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer
+from ouro_model import load_causal_lm
 
 from decode import Cache, step, token_features
 from oracle import make_g
@@ -125,7 +126,7 @@ def main():
     a = get_args()
     dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     tok = AutoTokenizer.from_pretrained(a.model)
-    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
+    model = load_causal_lm(a.model, torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
     g = make_g(model)
     pol = Policy(a, len(g.layers), dev)

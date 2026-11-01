@@ -1,0 +1,19 @@
+oracle (test): -0.6168  frac helped (<-0.05): 0.674
+
+signal  rank       k     m     dNLL               95% CI  switch  candidates
+top     mean       1  0.50  +0.0000 [+0.0000,+0.0000]    0.0%  swap@20
+negent  mean       1  0.50  -0.0001 [-0.0004,+0.0000]    0.0%  swap@20
+top     mean       2  0.50  +0.0000 [+0.0000,+0.0000]    0.0%  swap@20,swap@7
+negent  mean       1  0.20  -0.0004 [-0.0010,+0.0001]    0.4%  swap@20
+negent  mean       2  0.50  +0.0000 [-0.0004,+0.0004]    0.1%  swap@20,swap@7
+top     mean       4  0.50  +0.0002 [+0.0000,+0.0005]    0.1%  swap@20,swap@7,swap@9,repeat@11x2
+top     mean       1  0.20  -0.0000 [-0.0007,+0.0007]    0.3%  swap@20
+top     mean       1  0.10  +0.0000 [-0.0008,+0.0009]    0.9%  swap@20
+negent  mean       2  0.20  +0.0000 [-0.0011,+0.0011]    1.3%  swap@20,swap@7
+top     mean       2  0.20  +0.0003 [-0.0007,+0.0011]    0.8%  swap@20,swap@7
+negent  mean       4  0.50  +0.0001 [-0.0011,+0.0012]    0.3%  swap@20,swap@7,swap@9,repeat@11x2
+top     mean       8  0.50  +0.0005 [-0.0004,+0.0013]    0.3%  swap@20,swap@7,swap@9,repeat@11x2
+top     mean       4  0.20  +0.0004 [-0.0008,+0.0013]    1.2%  swap@20,swap@7,swap@9,repeat@11x2
+top     mean       1  0.05  +0.0005 [-0.0003,+0.0014]    4.6%  swap@20
+negent  mean       1  0.10  +0.0004 [-0.0007,+0.0014]    1.9%  swap@20
+saved ouro_quick/selfselect.json

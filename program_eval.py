@@ -50,7 +50,8 @@ def route_and_decode(g, ids, P, cost, paths, base_idx, lam):
 
 
 def main():
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoTokenizer
+    from ouro_model import load_causal_lm
 
     a = get_args()
     dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
@@ -67,7 +68,7 @@ def main():
         ctrl = Controller(m["d_in"], len(paths), ck["hidden"]).to(dev).eval()
         ctrl.load_state_dict(m["state"])
     tok = AutoTokenizer.from_pretrained(a.model)
-    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
+    model = load_causal_lm(a.model, torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
     g = make_g(model)
     chunks, _ = make_chunks(tok, a.n_tokens, a.seq_len)

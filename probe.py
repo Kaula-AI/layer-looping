@@ -240,7 +240,8 @@ for nm, X in sets.items():
           + " ".join(f"{o}:{v:.0%}" for o, v in used.items()))
     if nm == "lag_interp":
         np.savez(os.path.join(a.out_dir, "router_lag_interp.npz"), mean=sc.mean_, scale=sc.scale_, coef=m.coef_,
-                 intercept=m.intercept_, cfg_op=op, cfg_layer=lay, cfg_k=kk, cfg_cost=cost)
+                 intercept=m.intercept_, cfg_op=op, cfg_layer=lay, cfg_k=kk, cfg_cost=cost,
+                 cfg_end=d["cfg_end"] if "cfg_end" in d else lay, n_layers=L)
 
 # ---------------------------------------------------------------- prior-work heuristic baselines
 # Training-free per-token rules in the spirit of EGLR (arXiv 2606.16620: re-apply top layers when the
@@ -331,7 +332,7 @@ try:
         fr = pareto(res["frontiers"][nm])
         ax.plot([q["extra_layers"] for q in fr], [-q["dnll"] for q in fr], ls, color=c, label=nm, lw=2, marker=".", ms=3)
     st = res["frontiers"]["static"]
-    mk = {"repeat": "o", "skip": "v", "swap": "s", "block": "D"}
+    mk = {"repeat": "o", "skip": "v", "swap": "s", "block": "D", "exit": "x"}
     for o in OPS:
         pts = [q for q, oo in zip(st, op) if oo == o]
         ax.scatter([q["extra_layers"] for q in pts], [-q["dnll"] for q in pts], s=12, marker=mk.get(o, "."),

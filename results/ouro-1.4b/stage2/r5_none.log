@@ -1,0 +1,61 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:04<00:00,  2.33s/it]Fetching 2 files: 100%|██████████| 2/2 [00:04<00:00,  2.33s/it]
+loading 9664 fineweb-edu chunks of 1024
+train 9600 chunks, eval 64
+{"step": 0, "ce": 2.3859078884124756, "layers": 96.0, "lag": 0.0, "tau": 1.0, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 0.06213332414627075}
+{"step": 25, "ce": 2.382131338119507, "layers": 96.0, "lag": 0.0, "tau": 0.9752087908040357, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 1.3689083456993103}
+{"step": 50, "ce": 2.3517699241638184, "layers": 96.0, "lag": 0.0, "tau": 0.9510321856614693, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 2.679777463277181}
+{"step": 75, "ce": 2.446791172027588, "layers": 96.0, "lag": 0.0, "tau": 0.9274549477946405, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 3.98856121301651}
+{"step": 100, "ce": 2.5736169815063477, "layers": 96.0, "lag": 0.0, "tau": 0.9044622181640314, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 5.2975187540054325}
+{"step": 125, "ce": 2.5385689735412598, "layers": 96.0, "lag": 0.0, "tau": 0.8820395061036809, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 6.604705631732941}
+{"step": 150, "ce": 2.1469202041625977, "layers": 96.0, "lag": 0.0, "tau": 0.8601726801887595, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 7.913546268145243}
+{"step": 175, "ce": 2.4441213607788086, "layers": 96.0, "lag": 0.0, "tau": 0.8388479593295465, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 9.22386577129364}
+{"step": 200, "ce": 2.4972236156463623, "layers": 96.0, "lag": 0.0, "tau": 0.8180519040861999, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 10.533299875259399}
+{"step": 225, "ce": 2.4219117164611816, "layers": 96.0, "lag": 0.0, "tau": 0.797771408198842, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 11.843107926845551}
+{"step": 250, "ce": 2.2312822341918945, "layers": 96.0, "lag": 0.0, "tau": 0.7779936903276253, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 13.154625483353932}
+{"step": 275, "ce": 2.233586072921753, "layers": 96.0, "lag": 0.0, "tau": 0.7587062859975728, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 14.465374799569448}
+{"step": 300, "ce": 2.0739963054656982, "layers": 96.0, "lag": 0.0, "tau": 0.7398970397431138, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 15.774816318353016}
+{"step": 325, "ce": 2.268019676208496, "layers": 96.0, "lag": 0.0, "tau": 0.7215540974473675, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 17.084095748265586}
+{"step": 350, "ce": 2.163064479827881, "layers": 96.0, "lag": 0.0, "tau": 0.7036658988713446, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 18.395224312941235}
+{"step": 375, "ce": 2.388817548751831, "layers": 96.0, "lag": 0.0, "tau": 0.6862211703683587, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 19.707050331433614}
+{"step": 400, "ce": 2.143007516860962, "layers": 96.0, "lag": 0.0, "tau": 0.6692089177790572, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 21.01728413105011}
+{"step": 425, "ce": 2.227505922317505, "layers": 96.0, "lag": 0.0, "tau": 0.6526184195025917, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 22.331339263916014}
+{"step": 450, "ce": 2.419761896133423, "layers": 96.0, "lag": 0.0, "tau": 0.6364392197395633, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 23.641806375980376}
+{"step": 475, "ce": 2.1252729892730713, "layers": 96.0, "lag": 0.0, "tau": 0.6206611219024833, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 24.954171427090962}
+{"step": 500, "ce": 2.295767068862915, "layers": 96.0, "lag": 0.0, "tau": 0.6052741821895969, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 26.265047685305277}
+{"step": 525, "ce": 2.14253568649292, "layers": 96.0, "lag": 0.0, "tau": 0.5902687033180184, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 27.57590366601944}
+{"step": 550, "ce": 2.484125852584839, "layers": 96.0, "lag": 0.0, "tau": 0.5756352284122308, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 28.885543886820475}
+{"step": 575, "ce": 2.3110427856445312, "layers": 96.0, "lag": 0.0, "tau": 0.5613645350440964, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 30.196995488802592}
+{"step": 600, "ce": 1.9206382036209106, "layers": 96.0, "lag": 0.0, "tau": 0.547447629420623, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 31.507650736967722}
+{"step": 625, "ce": 2.7451529502868652, "layers": 96.0, "lag": 0.0, "tau": 0.5338757407158214, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 32.819243657588956}
+{"step": 650, "ce": 2.4311211109161377, "layers": 96.0, "lag": 0.0, "tau": 0.5206403155430851, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 34.129033319155376}
+{"step": 675, "ce": 2.210395336151123, "layers": 96.0, "lag": 0.0, "tau": 0.5077330125646036, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 35.44034269650777}
+{"step": 700, "ce": 2.430206060409546, "layers": 96.0, "lag": 0.0, "tau": 0.49514569723441726, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 36.75109659036001}
+{"step": 725, "ce": 2.3950960636138916, "layers": 96.0, "lag": 0.0, "tau": 0.48287043667179724, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 38.062682298819226}
+{"step": 750, "ce": 2.2556631565093994, "layers": 96.0, "lag": 0.0, "tau": 0.47089949466172, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 39.37224289576213}
+{"step": 775, "ce": 2.7011799812316895, "layers": 96.0, "lag": 0.0, "tau": 0.45922532677928735, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 40.682901263237}
+{"step": 800, "ce": 2.214526414871216, "layers": 96.0, "lag": 0.0, "tau": 0.447840575635017, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 41.99427175919215}
+{"step": 825, "ce": 2.595759868621826, "layers": 96.0, "lag": 0.0, "tau": 0.43673806623800815, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 43.30480464696884}
+{"step": 850, "ce": 2.4158895015716553, "layers": 96.0, "lag": 0.0, "tau": 0.4259108014740607, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 44.61700837214788}
+{"step": 875, "ce": 2.309046745300293, "layers": 96.0, "lag": 0.0, "tau": 0.41535195769589645, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 45.92569535573323}
+{"step": 900, "ce": 2.4194722175598145, "layers": 96.0, "lag": 0.0, "tau": 0.4050548804227041, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 47.2366539756457}
+{"step": 925, "ce": 2.4180831909179688, "layers": 96.0, "lag": 0.0, "tau": 0.3950130801462985, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 48.54774269660314}
+{"step": 950, "ce": 1.8516465425491333, "layers": 96.0, "lag": 0.0, "tau": 0.38522022824124935, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 49.85963353713353}
+{"step": 975, "ce": 2.1205172538757324, "layers": 96.0, "lag": 0.0, "tau": 0.37567015297640344, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 51.17027233839035}
+{"step": 1000, "ce": 2.5531904697418213, "layers": 96.0, "lag": 0.0, "tau": 0.3663568356252854, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 52.47933104435603}
+{"step": 1025, "ce": 2.391287088394165, "layers": 96.0, "lag": 0.0, "tau": 0.3572744066729274, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 53.7899795293808}
+{"step": 1050, "ce": 2.6599271297454834, "layers": 96.0, "lag": 0.0, "tau": 0.34841714211673486, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 55.100997896989185}
+{"step": 1075, "ce": 2.442553758621216, "layers": 96.0, "lag": 0.0, "tau": 0.33977945985905883, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 56.41204418738683}
+{"step": 1100, "ce": 2.4244613647460938, "layers": 96.0, "lag": 0.0, "tau": 0.33135591618920107, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 57.72221797704697}
+{"step": 1125, "ce": 2.4333837032318115, "layers": 96.0, "lag": 0.0, "tau": 0.3231412023526342, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 59.033903034528095}
+{"step": 1150, "ce": 2.3282630443573, "layers": 96.0, "lag": 0.0, "tau": 0.31513014120527455, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 60.34477774699529}
+{"step": 1175, "ce": 2.6319735050201416, "layers": 96.0, "lag": 0.0, "tau": 0.3073176839507008, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 61.65500362316767}
+{"step": 1199, "ce": 2.050638437271118, "layers": 96.0, "lag": 0.0, "tau": 0.3, "skip": 0.0, "once": 0.0, "twice": 0.0, "min": 62.91282622814178}
+EVAL {"nll": 2.277624762302969, "layers": 96.0}

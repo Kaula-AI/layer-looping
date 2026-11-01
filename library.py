@@ -70,7 +70,8 @@ def build_library(S, L, a):
 
 
 def main():
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoTokenizer
+    from ouro_model import load_causal_lm
 
     from oracle import base_records, feat_names, make_chunks, make_g
 
@@ -81,7 +82,7 @@ def main():
     print(f"library: {len(lib)} paths ({sum(e['op'] == 'composite' for e in lib)} composite)", flush=True)
     dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     tok = AutoTokenizer.from_pretrained(a.model)
-    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16,
+    model = load_causal_lm(a.model, torch.bfloat16,
                                                  attn_implementation="eager").to(dev).eval()
     g = make_g(model)
     raw_layer = a.raw_layer if a.raw_layer is not None else L // 2
