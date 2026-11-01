@@ -24,6 +24,12 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 
 **Quick run on E2B, bf16, RTX 4090, 20k tokens (2026-10-31)** — artifacts in `results/gemma-4-e2b-quick/`. Check: argmax 0.990, swap identity 0.625, oracle vs independent up to 0.18 nats. Oracle −0.80 nats at λ = 0 (43% of base NLL 1.91), but every learned router is *worse* than no edit (lag interp +0.068 [+0.056, +0.082], AUC 0.35; same-token interp +0.077, AUC 0.20), the best static program hurts (+0.014), and the training-free rules never beat no edit. At budget 0 every router's best point is "no edit". Base-NLL quintile 1 has 0% helped tokens; the oracle gain sits on high-loss tokens and is the min over 140 bf16-noisy deltas, so part of it is selection on noise. Same pattern as both whole-sequence pilots.
 
+**Rounds 1–3 on E2B (2026-10-31)**, artifacts in `results/gemma-4-e2b-rounds/`. All held-out; all negative.
+- *Noise:* fp32 oracle = bf16 oracle (−0.81 vs −0.81, delta corr 0.9999). The headroom is deterministic, not bf16 noise; routers retrained on fp32 labels are unchanged (lag interp +0.070, AUC 0.35).
+- *Label-free self-selection* (`selfselect.py`: run k candidates, keep the most confident output, margin m): best +0.0008 [−0.0007, +0.0025]; never below 0.
+- *Paths (E9–E11, programs-quick):* oracle grows with the option count (single edits −0.87, library −0.97, search −1.30 at budget 0), consistent with hindsight selection; MLP controllers' best point at budget 0 is no edit.
+- *Trained looping* (`train_loop.py`, LoRA r16, 1500×8×512 tokens, block 5–8 ×2, wiki/GSM8K NLL): base 2.394/1.302; LoRA control 2.136/0.942 (seed 1: 2.136/0.940); static loop 2.135/0.942; gated 2.137/0.943 (gate closes to 0.2%, hard loop rate 0%); static with loop lr 1e-2 2.136/0.942; static with pass-2 adapter r64 2.136/0.943. Alpha stays at |α| < 5e-4 even at lr 1e-2: training actively declines the loop. All loop variants are within control seed noise.
+
 ## E1 Headroom by op (the go/no-go, ~$1 quick, ~$2 full)
 **Question.** How much does the best single edit help each token? Which ops and layers win, and how often is a skip free?
 **Hypotheses.**

@@ -1,0 +1,38 @@
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/1951 [00:00<?, ?it/s]Loading weights:  30%|███       | 592/1951 [00:00<00:00, 5916.58it/s]Loading weights:  61%|██████    | 1184/1951 [00:00<00:00, 4558.97it/s]Loading weights:  85%|████████▌ | 1659/1951 [00:00<00:00, 4372.25it/s]Loading weights: 100%|██████████| 1951/1951 [00:00<00:00, 4452.80it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+train chunks 8766 (wiki 6000, gsm 2766); eval wiki 196, gsm 196
+trainable params: 24.16M
+{"step": 0, "loss": 2.3942630290985107, "alpha": -0.00019999958749394864, "gate_mean": null, "min": 0.02928018569946289}
+{"step": 50, "loss": 1.963628888130188, "alpha": 0.0016787649365141988, "gate_mean": null, "min": 0.8073367277781168}
+{"step": 100, "loss": 1.7125535011291504, "alpha": -0.004855557344853878, "gate_mean": null, "min": 1.6022156794865927}
+{"step": 150, "loss": 1.8178884983062744, "alpha": -0.0025409110821783543, "gate_mean": null, "min": 2.6591476440429687}
+{"step": 200, "loss": 1.525950312614441, "alpha": 0.0017136172391474247, "gate_mean": null, "min": 3.4380093693733214}
+{"step": 250, "loss": 1.5593756437301636, "alpha": 0.002280597109347582, "gate_mean": null, "min": 4.216979316870371}
+{"step": 300, "loss": 1.8455036878585815, "alpha": 0.010843784548342228, "gate_mean": null, "min": 4.996105813980103}
+{"step": 350, "loss": 1.6699177026748657, "alpha": -0.005524197593331337, "gate_mean": null, "min": 5.77907958428065}
+{"step": 400, "loss": 1.90054452419281, "alpha": -0.022575292736291885, "gate_mean": null, "min": 6.556807335217794}
+{"step": 450, "loss": 1.862836241722107, "alpha": 0.006213909015059471, "gate_mean": null, "min": 7.3353255470593774}
+{"step": 500, "loss": 1.5906611680984497, "alpha": 0.003700431203469634, "gate_mean": null, "min": 8.112821225325266}
+{"step": 550, "loss": 1.8028939962387085, "alpha": 0.01197696290910244, "gate_mean": null, "min": 8.88890788157781}
+{"step": 600, "loss": 1.725243091583252, "alpha": 0.005144839640706778, "gate_mean": null, "min": 9.647784181435902}
+{"step": 650, "loss": 1.6373271942138672, "alpha": -0.016048694029450417, "gate_mean": null, "min": 10.426071341832479}
+{"step": 700, "loss": 2.0107054710388184, "alpha": 0.011500874534249306, "gate_mean": null, "min": 11.211663858095806}
+{"step": 750, "loss": 1.4639040231704712, "alpha": 0.002027998911216855, "gate_mean": null, "min": 11.989634426434835}
+{"step": 800, "loss": 1.8181508779525757, "alpha": -0.003399553243070841, "gate_mean": null, "min": 12.769469793637594}
+{"step": 850, "loss": 1.5912295579910278, "alpha": -0.004894895479083061, "gate_mean": null, "min": 13.54728144009908}
+{"step": 900, "loss": 1.7477391958236694, "alpha": -0.014795501716434956, "gate_mean": null, "min": 14.325716356436411}
+{"step": 950, "loss": 1.3299599885940552, "alpha": 0.0016106480034068227, "gate_mean": null, "min": 15.102521634101867}
+{"step": 1000, "loss": 1.7329232692718506, "alpha": 0.0009128593956120312, "gate_mean": null, "min": 15.879894932111105}
+{"step": 1050, "loss": 1.609052300453186, "alpha": 0.004763389937579632, "gate_mean": null, "min": 16.8060129404068}
+{"step": 1100, "loss": 1.9229620695114136, "alpha": 0.0006239895010367036, "gate_mean": null, "min": 17.7329634308815}
+{"step": 1150, "loss": 1.531693458557129, "alpha": 0.003005016129463911, "gate_mean": null, "min": 18.51197119951248}
+{"step": 1200, "loss": 1.303980827331543, "alpha": 0.005365083459764719, "gate_mean": null, "min": 19.289098997910816}
+{"step": 1250, "loss": 1.6449882984161377, "alpha": -0.00046840787399560213, "gate_mean": null, "min": 20.0678457736969}
+{"step": 1300, "loss": 1.5296645164489746, "alpha": -0.0001845827791839838, "gate_mean": null, "min": 20.84582427342733}
+{"step": 1350, "loss": 1.4616464376449585, "alpha": -0.0005840000812895596, "gate_mean": null, "min": 21.626133867104848}
+{"step": 1400, "loss": 1.9786460399627686, "alpha": -0.0003683792892843485, "gate_mean": null, "min": 22.40536983013153}
+{"step": 1450, "loss": 1.7972328662872314, "alpha": -0.000500189489684999, "gate_mean": null, "min": 23.18304621775945}
+{"step": 1499, "loss": 1.4687362909317017, "alpha": -0.00048451634938828647, "gate_mean": null, "min": 23.945868480205537}
+EVAL static  wiki  nll 2.1357  loop_frac None
+EVAL static  gsm   nll 0.9415  loop_frac None

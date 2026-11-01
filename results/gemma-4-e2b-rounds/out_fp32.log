@@ -1,0 +1,15 @@
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/1951 [00:00<?, ?it/s]Loading weights:  18%|█▊        | 346/1951 [00:00<00:00, 3457.32it/s]Loading weights:  35%|███▌      | 692/1951 [00:00<00:00, 3137.81it/s]Loading weights:  52%|█████▏    | 1008/1951 [00:03<00:04, 229.04it/s]Loading weights:  61%|██████    | 1185/1951 [00:03<00:02, 262.99it/s]Loading weights:  67%|██████▋   | 1310/1951 [00:04<00:02, 260.06it/s]Loading weights:  82%|████████▏ | 1594/1951 [00:04<00:00, 409.05it/s]Loading weights: 100%|█████████▉| 1950/1951 [00:04<00:00, 649.21it/s]Loading weights: 100%|██████████| 1951/1951 [00:04<00:00, 447.99it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+40 chunks x 512 tokens, 140 programs (repeat: 70, skip: 35, swap: 34, block: 1), device cuda
+4/40 chunks | 1.0 min | ETA 9.1 min
+8/40 chunks | 2.0 min | ETA 8.0 min
+12/40 chunks | 3.0 min | ETA 7.0 min
+16/40 chunks | 4.0 min | ETA 6.0 min
+20/40 chunks | 5.0 min | ETA 5.0 min
+24/40 chunks | 6.0 min | ETA 4.0 min
+28/40 chunks | 7.0 min | ETA 3.0 min
+32/40 chunks | 8.0 min | ETA 2.0 min
+36/40 chunks | 9.0 min | ETA 1.0 min
+40/40 chunks | 10.0 min | ETA 0.0 min
+saved out_fp32/oracle.npz  (20,440 positions)

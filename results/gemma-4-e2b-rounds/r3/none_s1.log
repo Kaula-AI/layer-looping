@@ -1,0 +1,38 @@
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/1951 [00:00<?, ?it/s]Loading weights:  27%|██▋       | 535/1951 [00:00<00:00, 5304.66it/s]Loading weights:  55%|█████▍    | 1066/1951 [00:00<00:00, 4263.37it/s]Loading weights:  77%|███████▋  | 1505/1951 [00:00<00:00, 4023.89it/s]Loading weights:  98%|█████████▊| 1914/1951 [00:00<00:00, 3983.57it/s]Loading weights: 100%|██████████| 1951/1951 [00:00<00:00, 4116.80it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+train chunks 8766 (wiki 6000, gsm 2766); eval wiki 196, gsm 196
+trainable params: 24.16M
+{"step": 0, "loss": 1.7785415649414062, "alpha": 0.0, "gate_mean": null, "min": 0.025707395871480306}
+{"step": 50, "loss": 1.8971879482269287, "alpha": 0.0, "gate_mean": null, "min": 0.7439090927441915}
+{"step": 100, "loss": 1.3034837245941162, "alpha": 0.0, "gate_mean": null, "min": 1.46192786693573}
+{"step": 150, "loss": 1.6018511056900024, "alpha": 0.0, "gate_mean": null, "min": 2.1800285935401917}
+{"step": 200, "loss": 1.6379261016845703, "alpha": 0.0, "gate_mean": null, "min": 2.8975904027620953}
+{"step": 250, "loss": 1.9251275062561035, "alpha": 0.0, "gate_mean": null, "min": 3.595307942231496}
+{"step": 300, "loss": 2.008814811706543, "alpha": 0.0, "gate_mean": null, "min": 4.314583742618561}
+{"step": 350, "loss": 1.4514172077178955, "alpha": 0.0, "gate_mean": null, "min": 5.037209570407867}
+{"step": 400, "loss": 1.714954137802124, "alpha": 0.0, "gate_mean": null, "min": 5.755215815703074}
+{"step": 450, "loss": 1.590551495552063, "alpha": 0.0, "gate_mean": null, "min": 6.474962015946706}
+{"step": 500, "loss": 2.17728328704834, "alpha": 0.0, "gate_mean": null, "min": 7.194098174571991}
+{"step": 550, "loss": 1.7237030267715454, "alpha": 0.0, "gate_mean": null, "min": 7.9129065791765845}
+{"step": 600, "loss": 1.9525941610336304, "alpha": 0.0, "gate_mean": null, "min": 8.631505676110585}
+{"step": 650, "loss": 1.6610757112503052, "alpha": 0.0, "gate_mean": null, "min": 9.350206442674}
+{"step": 700, "loss": 1.620676040649414, "alpha": 0.0, "gate_mean": null, "min": 10.068879012266795}
+{"step": 750, "loss": 1.750359058380127, "alpha": 0.0, "gate_mean": null, "min": 10.786488064130147}
+{"step": 800, "loss": 1.7491885423660278, "alpha": 0.0, "gate_mean": null, "min": 11.811115149656931}
+{"step": 850, "loss": 1.901300311088562, "alpha": 0.0, "gate_mean": null, "min": 12.514206544558208}
+{"step": 900, "loss": 1.3857048749923706, "alpha": 0.0, "gate_mean": null, "min": 13.236162813504537}
+{"step": 950, "loss": 1.7390516996383667, "alpha": 0.0, "gate_mean": null, "min": 13.952726833025615}
+{"step": 1000, "loss": 1.2716057300567627, "alpha": 0.0, "gate_mean": null, "min": 14.672470998764037}
+{"step": 1050, "loss": 1.7720173597335815, "alpha": 0.0, "gate_mean": null, "min": 15.390277250607808}
+{"step": 1100, "loss": 1.7759453058242798, "alpha": 0.0, "gate_mean": null, "min": 16.107673025131227}
+{"step": 1150, "loss": 1.8513661623001099, "alpha": 0.0, "gate_mean": null, "min": 16.82648044427236}
+{"step": 1200, "loss": 1.6525094509124756, "alpha": 0.0, "gate_mean": null, "min": 17.543368446826936}
+{"step": 1250, "loss": 1.6285316944122314, "alpha": 0.0, "gate_mean": null, "min": 18.259925496578216}
+{"step": 1300, "loss": 1.3535526990890503, "alpha": 0.0, "gate_mean": null, "min": 18.957619086901346}
+{"step": 1350, "loss": 1.5920283794403076, "alpha": 0.0, "gate_mean": null, "min": 19.6761368393898}
+{"step": 1400, "loss": 1.627217173576355, "alpha": 0.0, "gate_mean": null, "min": 20.393486563364664}
+{"step": 1450, "loss": 1.3609923124313354, "alpha": 0.0, "gate_mean": null, "min": 21.11143215894699}
+{"step": 1499, "loss": 1.4280022382736206, "alpha": 0.0, "gate_mean": null, "min": 21.816387184460957}
+EVAL none    wiki  nll 2.1357  loop_frac None
+EVAL none    gsm   nll 0.9398  loop_frac None

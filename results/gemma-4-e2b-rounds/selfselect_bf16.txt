@@ -1,0 +1,19 @@
+oracle (test): -0.8072  frac helped (<-0.05): 0.760
+
+signal  rank       k     m     dNLL               95% CI  switch  candidates
+top     mean       1  0.50  +0.0009 [-0.0004,+0.0022]    0.4%  repeat@7x2
+top     mean       2  0.50  +0.0007 [-0.0007,+0.0023]    0.5%  repeat@7x2,swap@30
+top     mean       1  0.20  +0.0016 [-0.0000,+0.0034]    2.4%  repeat@7x2
+negent  mean       1  0.50  +0.0014 [-0.0009,+0.0046]    0.8%  repeat@7x2
+negent  mean       1  0.20  +0.0022 [-0.0012,+0.0061]    3.3%  repeat@7x2
+top     mean       4  0.50  +0.0034 [+0.0008,+0.0065]    1.1%  repeat@7x2,swap@30,skip@7,skip@6
+negent  mean       1  0.10  +0.0033 [-0.0001,+0.0074]    8.1%  repeat@7x2
+top     mean       2  0.20  +0.0057 [+0.0007,+0.0115]    3.2%  repeat@7x2,swap@30
+negent  mean       2  0.50  +0.0060 [+0.0005,+0.0123]    1.0%  repeat@7x2,swap@30
+top     mean       1  0.10  +0.0069 [+0.0017,+0.0125]    6.8%  repeat@7x2
+negent  mean       1  0.05  +0.0076 [+0.0032,+0.0129]   15.7%  repeat@7x2
+negent  mean       2  0.20  +0.0071 [+0.0013,+0.0137]    4.2%  repeat@7x2,swap@30
+negent  mean       1  0.00  +0.0081 [+0.0027,+0.0141]   39.8%  repeat@7x2
+top     mean       1  0.05  +0.0080 [+0.0020,+0.0150]   13.8%  repeat@7x2
+negent  mean       4  0.50  +0.0084 [+0.0010,+0.0175]    2.2%  repeat@7x2,swap@30,skip@7,skip@6
+saved out_bf16/selfselect.json
