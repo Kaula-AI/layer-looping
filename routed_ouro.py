@@ -84,7 +84,7 @@ class RoutedOuro(nn.Module):
         self.heads = nn.Linear(d, 3 * self.V)  # one 3-way head per virtual layer, batched
         nn.init.zeros_(self.heads.weight)
         with torch.no_grad():
-            self.heads.bias.view(self.V, 3).copy_(torch.tensor([-3.0, 3.0, -3.0]))  # start as the base path
+            self.heads.bias.view(self.V, 3).copy_(torch.tensor([-2.0, 2.0, -2.0]))  # ~97% once at tau=1: near the base path
 
     def routable(self, j):
         return self.use_router and self.protect <= j < self.V - self.protect
@@ -171,11 +171,11 @@ def main():
     p.add_argument("--target_layers", type=float, default=72.0, help="mean layer applications per token")
     p.add_argument("--seq_len", type=int, default=1024)
     p.add_argument("--batch", type=int, default=8)
-    p.add_argument("--steps", type=int, default=2500)
+    p.add_argument("--steps", type=int, default=1200)
     p.add_argument("--lr", type=float, default=2e-4)
-    p.add_argument("--head_lr", type=float, default=1e-3)
+    p.add_argument("--head_lr", type=float, default=1e-2)
     p.add_argument("--rank", type=int, default=16)
-    p.add_argument("--lag_lr", type=float, default=0.02, help="Lagrange multiplier step (per layer of excess)")
+    p.add_argument("--lag_lr", type=float, default=0.2, help="Lagrange multiplier step (per layer of excess)")
     p.add_argument("--tau", type=float, nargs=2, default=[1.0, 0.3])
     p.add_argument("--eval_chunks", type=int, default=64)
     p.add_argument("--seed", type=int, default=0)
