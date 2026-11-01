@@ -1,0 +1,32 @@
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 1006.19it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  mmlu: 0/4000 sequences, 0.0 min
+  mmlu: 640/4000 sequences, 0.1 min
+  mmlu: 1280/4000 sequences, 0.2 min
+  mmlu: 1920/4000 sequences, 0.3 min
+  mmlu: 2560/4000 sequences, 0.4 min
+  mmlu: 3200/4000 sequences, 0.5 min
+  mmlu: 3840/4000 sequences, 0.8 min
+mmlu           base           acc 0.669 [0.641,0.698]  acc_norm 0.669 [0.641,0.698]  layers/tok   96.0
+mmlu           rounds:3       acc 0.643 [0.614,0.672]  acc_norm 0.643 [0.614,0.672]  layers/tok   72.0
+mmlu           rounds:5       acc 0.664 [0.634,0.690]  acc_norm 0.664 [0.634,0.690]  layers/tok  120.0
+mmlu           gate:0.2       acc 0.667 [0.638,0.697]  acc_norm 0.667 [0.638,0.697]  layers/tok   79.8
+mmlu           gate:0.5       acc 0.669 [0.641,0.698]  acc_norm 0.669 [0.641,0.698]  layers/tok   93.6
+  (mmlu: 1.0 min)
+  winogrande: 0/2000 sequences, 0.0 min
+  winogrande: 640/2000 sequences, 0.1 min
+  winogrande: 1280/2000 sequences, 0.1 min
+  winogrande: 1920/2000 sequences, 0.2 min
+winogrande     base           acc 0.672 [0.643,0.702]  acc_norm 0.672 [0.643,0.702]  layers/tok   96.0
+winogrande     rounds:3       acc 0.676 [0.648,0.704]  acc_norm 0.676 [0.648,0.704]  layers/tok   72.0
+winogrande     rounds:5       acc 0.679 [0.650,0.708]  acc_norm 0.679 [0.650,0.708]  layers/tok  120.0
+winogrande     gate:0.2       acc 0.671 [0.641,0.701]  acc_norm 0.671 [0.641,0.701]  layers/tok   72.0
+winogrande     gate:0.5       acc 0.670 [0.641,0.699]  acc_norm 0.670 [0.641,0.699]  layers/tok   88.0
+  (winogrande: 0.2 min)

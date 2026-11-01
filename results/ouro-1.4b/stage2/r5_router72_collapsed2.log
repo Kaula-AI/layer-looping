@@ -1,0 +1,16 @@
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 960.12it/s]
+loading 9664 fineweb-edu chunks of 1024
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+train 9600 chunks, eval 64
+{"step": 0, "ce": 2.4782071113586426, "layers": 95.9947509765625, "lag": 0.012497266133626303, "tau": 1.0, "skip": 0.01638263277709484, "once": 0.9672917723655701, "twice": 0.016325578093528748, "min": 0.11787163019180298}
+{"step": 25, "ce": 2.475311517715454, "layers": 95.5772705078125, "lag": 0.32320518493652345, "tau": 0.9752087908040357, "skip": 0.018476402387022972, "once": 0.967642068862915, "twice": 0.013881517574191093, "min": 2.8332711776097614}
+{"step": 50, "ce": 2.488433361053467, "layers": 92.1865234375, "lag": 0.6148896535237631, "tau": 0.9510321856614693, "skip": 0.05515720695257187, "once": 0.931136429309845, "twice": 0.013706373050808907, "min": 5.544560829798381}
+{"step": 75, "ce": 8.17538833618164, "layers": 16.505859375, "lag": 0.44709885915120473, "tau": 0.9274549477946405, "skip": 0.8686563372612, "once": 0.12675409018993378, "twice": 0.004589578602463007, "min": 8.252619159221648}
+{"step": 100, "ce": 6.597034931182861, "layers": 9.252197265625, "lag": 0.0, "tau": 0.9044622181640314, "skip": 0.9463925361633301, "once": 0.050125785171985626, "twice": 0.003481657709926367, "min": 10.959243226051331}

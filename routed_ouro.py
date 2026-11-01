@@ -177,6 +177,7 @@ def main():
     p.add_argument("--head_w_lr", type=float, default=1e-5,
                    help="router head weights: Adam moves all d inputs at once, so a logit moves ~lr*d per step")
     p.add_argument("--rank", type=int, default=16)
+    p.add_argument("--no_lora", action="store_true", help="freeze Ouro entirely; train only the router heads")
     p.add_argument("--mu", type=float, default=2.0, help="budget penalty: mu * (excess / (L - target))^2")
     p.add_argument("--anneal", type=float, default=0.4, help="fraction of steps over which the target anneals")
     p.add_argument("--tau", type=float, nargs=2, default=[1.0, 0.3])
@@ -193,7 +194,8 @@ def main():
     ouro = load_ouro(a.model, torch.bfloat16).cuda()
     for p_ in ouro.parameters():
         p_.requires_grad_(False)
-    add_lora(ouro, a.rank, 2 * a.rank)
+    if not a.no_lora:
+        add_lora(ouro, a.rank, 2 * a.rank)
     ouro.cuda()
     model = RoutedOuro(ouro, use_router=a.variant == "router").cuda()
     model.heads.float()
@@ -201,7 +203,7 @@ def main():
     for p_ in lora:
         p_.data = p_.data.float()
         p_.requires_grad_(True)
-    groups = [{"params": lora, "lr": a.lr}]
+    groups = [{"params": lora, "lr": a.lr}] if lora else []
     if a.variant == "router":
         groups.append({"params": [model.heads.bias], "lr": a.head_lr})
         groups.append({"params": [model.heads.weight], "lr": a.head_w_lr})

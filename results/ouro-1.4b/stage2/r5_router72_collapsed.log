@@ -1,0 +1,14 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:05<00:00,  2.52s/it]Fetching 2 files: 100%|██████████| 2/2 [00:05<00:00,  2.52s/it]
+loading 9664 fineweb-edu chunks of 1024
+train 9600 chunks, eval 64
+{"step": 0, "ce": 2.4782071113586426, "layers": 95.9947509765625, "lag": 0.04998906453450521, "tau": 1.0, "skip": 0.01638263277709484, "once": 0.9672917723655701, "twice": 0.016325578093528748, "min": 0.12340073585510254}
+{"step": 25, "ce": 8.263066291809082, "layers": 18.48291015625, "lag": 0.0, "tau": 0.9752087908040357, "skip": 0.851165771484375, "once": 0.14024552702903748, "twice": 0.008588708005845547, "min": 2.8380238890647886}
+{"step": 50, "ce": 3.326359510421753, "layers": 32.609375, "lag": 0.0, "tau": 0.9510321856614693, "skip": 0.7068653702735901, "once": 0.27529773116111755, "twice": 0.017836861312389374, "min": 5.555961692333222}
