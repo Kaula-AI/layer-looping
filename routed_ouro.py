@@ -102,9 +102,11 @@ class RoutedOuro(nn.Module):
         h = x + layer.input_layernorm_2(a.o_proj(o))
         return h + layer.post_attention_layernorm_2(layer.mlp(layer.post_attention_layernorm(h)))
 
-    def forward(self, ids, tau=1.0, hard_eval=False, ckpt=False):
+    def forward(self, ids, tau=1.0, hard_eval=False, ckpt=False, force=None, record=None):
         """Returns logits (B, T, V), per-token layer applications (B, T), soft expected cost (B, T),
-        and action counts (3,)."""
+        and action counts (3,). Diagnostics: `force` (B, T, V) long overrides the router's action at every
+        routable layer; `record` (a list) receives each routable layer's actions (B, T) and probabilities
+        (B, T, 3) as (j, act, p) tuples."""
         m = self.ouro.model
         x = m.embed_tokens(ids)
         pos = torch.arange(ids.shape[1], device=ids.device)[None].expand(ids.shape[0], -1)
@@ -125,14 +127,17 @@ class RoutedOuro(nn.Module):
                 continue
             xs = x.to(self.heads.weight.dtype)
             logit = self.heads(xs * torch.rsqrt(xs.pow(2).mean(-1, keepdim=True) + 1e-6))[..., 3 * j: 3 * j + 3]
-            if hard_eval:
+            if force is not None:
+                w = F.one_hot(force[..., j], 3).float()
+                soft = w
+            elif hard_eval:
                 w = F.one_hot(logit.argmax(-1), 3).float()
                 soft = w
             else:
                 g = -torch.log(-torch.log(torch.rand_like(logit).clamp(1e-9, 1 - 1e-9)))
                 soft = F.softmax((logit + g) / tau, -1)
                 w = F.one_hot(soft.argmax(-1), 3).float() - soft.detach() + soft
-            if bool((w[..., 2] > 0).any()) or not hard_eval:
+            if bool((w[..., 2] > 0).any()) or not (hard_eval or force is not None):
                 f2 = checkpoint(run, f1, use_reentrant=False) if ckpt else run(f1)
             else:
                 f2 = f1
@@ -143,6 +148,8 @@ class RoutedOuro(nn.Module):
             counts += F.one_hot(act, 3).float().sum((0, 1))
             p = F.softmax(logit.float(), -1)
             exp_cost += p[..., 2] - p[..., 0]
+            if record is not None:
+                record.append((j, act, p.detach()))
         x = m.norm(x)
         return self.ouro.lm_head(x), layers_run, exp_cost, counts
 
