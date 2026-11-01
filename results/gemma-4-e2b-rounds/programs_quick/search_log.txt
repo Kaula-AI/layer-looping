@@ -1,0 +1,11 @@
+4/40 chunks | 6.4 min | ETA 57.6 min
+8/40 chunks | 21.6 min | ETA 86.2 min
+12/40 chunks | 35.3 min | ETA 82.4 min
+16/40 chunks | 50.4 min | ETA 75.7 min
+20/40 chunks | 64.2 min | ETA 64.2 min
+24/40 chunks | 78.2 min | ETA 52.1 min
+28/40 chunks | 90.6 min | ETA 38.8 min
+32/40 chunks | 104.3 min | ETA 26.1 min
+36/40 chunks | 119.2 min | ETA 13.2 min
+40/40 chunks | 133.0 min | ETA 0.0 min
+saved programs_quick/search.npz  (20,440 positions); mean best dNLL -1.3302

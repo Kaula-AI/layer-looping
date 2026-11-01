@@ -1,0 +1,52 @@
+== E1 Oracle headroom ==
+  positions: 20440
+  base_nll: 1.9072030782699585
+  oracle_nll_reduction: 0.9824340343475342
+  oracle_pct_of_base: 51.51176834106445
+  frac_helped: 0.7570939334637965
+  best_static: {'program': np.str_('base:0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34'), 'mean_dnll': 0.0}
+  frac_tokens_with_safe_skip: 0.9996575342465753
+  [repeat] gain if restricted: 0.6645  best-op share: 8.8%  best static: repeat:0,1,2,3,4,5,6,7,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34
+  [skip] gain if restricted: 0.5402  best-op share: 1.9%  best static: skip:0,1,2,3,4,5,6,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34
+  [swap] gain if restricted: 0.5269  best-op share: 2.1%  best static: swap:0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,31,30,32,33,34
+  [reverse] gain if restricted: 0.6814  best-op share: 9.0%  best static: reverse:0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,32,31,30,33,34
+  [loop] gain if restricted: 0.6991  best-op share: 10.1%  best static: loop:0,1,2,3,4,5,6,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34
+  [composite] gain if restricted: 0.8216  best-op share: 43.8%  best static: composite:0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,28,30,29,31,32,33,34
+
+== E2/E3 Routers on held-out chunks (lambda = 0) ==
+  oracle:      -0.9727
+  best static: +0.0000  (base:0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34, chosen on train)
+  features                     dNLL              95% CI    AUC  edit%  +layers  ops used
+  same_interp               +0.1069 [+0.0865,+0.1313]  0.213  91.4%   -0.298  repeat:15% skip:17% swap:8% reverse:9% loop:8% composite:44%
+  lag_interp                +0.0846 [+0.0676,+0.1033]  0.340  90.0%   +0.025  repeat:25% skip:17% swap:13% reverse:8% loop:11% composite:25%
+  lag_interp_surprisal      +0.0774 [+0.0542,+0.1007]  0.351  89.7%   -0.011  repeat:25% skip:17% swap:13% reverse:8% loop:11% composite:27%
+  same_raw                  +0.4344 [+0.3476,+0.5098]  0.464 100.0%   -0.048  repeat:11% skip:4% swap:4% reverse:14% loop:14% composite:53%
+  lag_raw                   +0.5294 [+0.4100,+0.6307]  0.538  99.9%   +0.070  repeat:10% skip:4% swap:4% reverse:12% loop:18% composite:53%
+
+== Prior-work heuristic baselines (training-free) ==
+  rule_entropy_same        best dNLL +0.0000 at +0.000 layers (threshold quantile None)
+  rule_entropy_lag         best dNLL +0.0000 at +0.000 layers (threshold quantile None)
+  rule_normpeak_same       best dNLL +0.0000 at +0.000 layers (threshold quantile None)
+  (entropy rules repeat repeat:0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,31,32,33,34, the best top-4-layer repeat on train)
+
+== E2 Budget-matched dNLL (best frontier point with <= budget extra layers/token) ==
+                              -1.00    -0.50    +0.00    +0.25    +0.50
+  oracle                    -0.9722  -0.9727  -0.9727  -0.9727  -0.9727
+  same_interp               +0.1098  +0.1056  +0.0000  +0.0000  +0.0000
+  lag_interp                +0.0879  +0.0766  +0.0000  +0.0000  +0.0000
+  lag_interp_surprisal      +0.0845  +0.0734  +0.0000  +0.0000  +0.0000
+  same_raw                  +0.3217  +0.3217  +0.0000  +0.0000  +0.0000
+  lag_raw                   +0.3854  +0.3854  +0.0000  +0.0000  +0.0000
+  rule_entropy_same               —        —  +0.0000  +0.0000  +0.0000
+  rule_entropy_lag                —        —  +0.0000  +0.0000  +0.0000
+  rule_normpeak_same              —        —  +0.0000  +0.0000  +0.0000
+
+  E3 lag recovery (t-1 interp / same-token interp at lambda=0): None
+
+== E4 Lagged interp feature groups (lambda = 0) ==
+  lens_ent                  +0.0334  +layers -0.334
+  lens_agree                +0.0046  +layers +0.043
+  upd_norm                  +0.0450  +layers -0.259
+  attn_ent                  +0.0424  +layers -0.239
+
+saved programs_quick/frontier.png and results.json

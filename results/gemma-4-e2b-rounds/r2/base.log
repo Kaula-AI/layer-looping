@@ -1,0 +1,6 @@
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/1951 [00:00<?, ?it/s]Loading weights:  30%|███       | 591/1951 [00:00<00:00, 5908.67it/s]Loading weights:  61%|██████    | 1182/1951 [00:00<00:00, 4556.81it/s]Loading weights:  85%|████████▍ | 1657/1951 [00:00<00:00, 4183.06it/s]Loading weights: 100%|██████████| 1951/1951 [00:00<00:00, 4360.25it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+train chunks 8766 (wiki 6000, gsm 2766); eval wiki 196, gsm 196
+EVAL base    wiki  nll 2.3936  loop_frac None
+EVAL base    gsm   nll 1.3015  loop_frac None

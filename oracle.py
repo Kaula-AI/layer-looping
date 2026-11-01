@@ -54,6 +54,9 @@ def get_args():
     p.add_argument("--raw_layer", type=int, default=None, help="residual index saved for raw probe (default: L//2)")
     p.add_argument("--out", default="oracle_out")
     p.add_argument("--check", action="store_true", help="only verify the manual forward matches HF")
+    p.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float32"])
+    p.add_argument("--save_conf", action="store_true",
+                   help="also save each program's output entropy and max log-prob (label-free self-selection)")
     return p.parse_args()
 
 
@@ -359,6 +362,16 @@ class G2:
         out = [F.cross_entropy(self.logits(h[b, :-1]), ids[b, 1:], reduction="none") for b in range(h.shape[0])]
         return torch.stack(out)  # B, T-1 ; position t predicts token t+1
 
+    def nll_conf(self, h, ids):
+        """nll plus label-free confidence of the prediction: entropy and max log-prob (each B, T-1)."""
+        nll, ent, top = [], [], []
+        for b in range(h.shape[0]):
+            lp = self.logits(h[b, :-1]).float().log_softmax(-1)
+            nll.append(-lp.gather(-1, ids[b, 1:, None])[:, 0])
+            ent.append(-(lp.exp() * lp).sum(-1))
+            top.append(lp.max(-1).values)
+        return torch.stack(nll), torch.stack(ent), torch.stack(top)
+
     @torch.no_grad()
     def lens_features(self, hs):
         L = len(self.layers)
@@ -553,7 +566,7 @@ def main():
     dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     tok = AutoTokenizer.from_pretrained(a.model)
     model = AutoModelForCausalLM.from_pretrained(
-        a.model, torch_dtype=torch.bfloat16, attn_implementation="eager"
+        a.model, torch_dtype=getattr(torch, a.dtype), attn_implementation="eager"
     ).to(dev).eval()
     g = make_g(model)
     sw = getattr(g.cfg, "sliding_window", None)
@@ -575,19 +588,22 @@ def main():
     print(f"{len(chunks)} chunks x {a.seq_len} tokens, {len(progs)} programs "
           f"({', '.join(f'{o}: {sum(p_['op'] == o for p_ in progs)}' for o in list(a.ops) + (['block'] if blocks else []))}), device {dev}", flush=True)
     os.makedirs(a.out, exist_ok=True)
-    rec = {k: [] for k in ["delta", "feat", "base_nll", "raw", "tok", "chunk", "pos"]}
+    rec = {k: [] for k in ["delta", "feat", "base_nll", "raw", "tok", "chunk", "pos"]
+           + (["ent_edit", "top_edit", "ent_base", "top_base"] if a.save_conf else [])}
     t0 = time.time()
     for bi in range(0, len(chunks), a.batch):
         ids = torch.tensor(chunks[bi : bi + a.batch], device=dev)
         B, T = ids.shape
         with torch.no_grad():
             hs, kvs, attn_ent, cs = g.base_pass(ids)
-            base_nll = g.nll(hs[-1], ids)
+            base_nll, ent_b, top_b = g.nll_conf(hs[-1], ids)
             ent, agree, upd = g.lens_features(hs)
             feat = torch.cat([ent, agree, upd, attn_ent.float()], -1)[:, :-1]
             delta = torch.empty(B, T - 1, len(progs), device=dev)
+            ent_e, top_e = torch.empty_like(delta), torch.empty_like(delta)
             for ci, pr in enumerate(progs):
-                delta[..., ci] = g.nll(g.run_program(hs, kvs, cs, pr["seq"]), ids) - base_nll
+                n_, ent_e[..., ci], top_e[..., ci] = g.nll_conf(g.run_program(hs, kvs, cs, pr["seq"]), ids)
+                delta[..., ci] = n_ - base_nll
         rec["delta"].append(delta.half().cpu().numpy().reshape(-1, len(progs)))
         rec["feat"].append(feat.half().cpu().numpy().reshape(-1, feat.shape[-1]))
         rec["base_nll"].append(base_nll.float().cpu().numpy().reshape(-1))
@@ -595,6 +611,11 @@ def main():
         rec["tok"].append(ids[:, :-1].cpu().numpy().reshape(-1))
         rec["chunk"].append(np.repeat(np.arange(bi, bi + B), T - 1))
         rec["pos"].append(np.tile(np.arange(T - 1), B))
+        if a.save_conf:
+            rec["ent_edit"].append(ent_e.half().cpu().numpy().reshape(-1, len(progs)))
+            rec["top_edit"].append(top_e.half().cpu().numpy().reshape(-1, len(progs)))
+            rec["ent_base"].append(ent_b.float().cpu().numpy().reshape(-1))
+            rec["top_base"].append(top_b.float().cpu().numpy().reshape(-1))
         done, el = bi + B, time.time() - t0
         print(f"{done}/{len(chunks)} chunks | {el / 60:.1f} min | ETA {el / done * (len(chunks) - done) / 60:.1f} min",
               flush=True)
