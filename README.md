@@ -6,13 +6,20 @@
 
 Tyler Gee · [Kāula](https://kaula.ai)
 
-[**Paper (PDF)**](paper/paper.pdf) · [**Explainer**](https://kaula-ai.github.io/layer-looping/) · [**Experiments**](EXPERIMENTS.md) · [**Citation**](#citation)
+[**Findings**](docs/findings.md) · [**Paper (PDF)**](paper/paper.pdf) · [**Explainer**](https://kaula-ai.github.io/layer-looping/) · [**Experiments**](EXPERIMENTS.md) · [**Citation**](#citation)
 
 </div>
 
 ---
 
-> **Status: experiments in progress; no results yet.** The paper draft's results render as `[pending]` until `bash run_experiments.sh full` has run and `python scripts/make_tables.py` has filled them in from `results.json`.
+> **Findings so far** ([full write-up](docs/findings.md)):
+> - In hindsight, the best per-token layer edit cuts loss by 0.6–0.9 nats per token on every model tested, but no router fitted to a frozen model captures any of it. The gain is mostly selection after seeing the answer.
+> - A router trained *with* the model works. Ouro-1.4B's built-in exit gate beats fixed compute on ARC-Easy by +3.6 points at equal compute (paired p < 0.0001).
+> - Our finer per-layer skip/once/twice router, trained on about 10M tokens, loses to that coarse gate on 4 of 5 benchmarks.
+>
+> The LaTeX paper draft in `paper/` predates these results and still shows `[pending]`.
+
+![Gate vs router](docs/figures/fig2_gate_vs_router.png)
 
 A pretrained transformer sends every token through every layer once. This project asks three questions:
 
