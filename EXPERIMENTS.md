@@ -30,6 +30,12 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 - *Paths (E9–E11, programs-quick):* oracle grows with the option count (single edits −0.87, library −0.97, search −1.30 at budget 0), consistent with hindsight selection; MLP controllers' best point at budget 0 is no edit.
 - *Trained looping* (`train_loop.py`, LoRA r16, 1500×8×512 tokens, block 5–8 ×2, wiki/GSM8K NLL): base 2.394/1.302; LoRA control 2.136/0.942 (seed 1: 2.136/0.940); static loop 2.135/0.942; gated 2.137/0.943 (gate closes to 0.2%, hard loop rate 0%); static with loop lr 1e-2 2.136/0.942; static with pass-2 adapter r64 2.136/0.943. Alpha stays at |α| < 5e-4 even at lr 1e-2: training actively declines the loop. All loop variants are within control seed noise.
 
+**Ouro-1.4B (LoopLM, 24 layers × 4 rounds = 96 virtual layers; 2026-11-01)**, artifacts in `results/ouro-1.4b/`.
+- *Frozen per-token routing (387 single-edit programs incl. exits and a 5th round, 20k tokens):* oracle −0.60 at λ = 0; every ridge router worse than no edit (lag interp +0.057 [+0.046, +0.070], AUC 0.45).
+- *Ouro's own exit gate (trained with the model)* at matched compute beats every router: q = 0.5 exits 54% of tokens early, −13 layers/token, dNLL −0.002; q = 0.2 saves 32 layers/token for +0.004 (`ouro_compare.py`).
+- *Benchmarks* (`bench.py`, 1000 items or the full set, per-token paths against base-pass K/V): gate:0.2 vs fixed 3 rounds at ~72 layers/token (paired, `bench_compare.py`): ARC-Easy acc_norm +3.6 pts [+2.2, +5.0], McNemar p < 1e-4 (acc +2.3, p = 0.0004); ARC-Challenge +1.0 [−0.2, +2.2]; HellaSwag +0.2 at 65.8 vs 72 layers. A 5th round for every token adds nothing. The frozen ridge router on ARC-Challenge (500 items) is no better than its shuffled control (acc 0.450 vs 0.458; base 0.474).
+- *Conclusion so far:* per-token compute routing pays off on benchmarks when the router is trained with the model, not when it is fitted to a frozen one. Stage 2 (`routed_ouro.py`) trains a per-layer skip/once/twice router jointly with LoRA, against a LoRA-only control.
+
 ## E1 Headroom by op (the go/no-go, ~$1 quick, ~$2 full)
 **Question.** How much does the best single edit help each token? Which ops and layers win, and how often is a skip free?
 **Hypotheses.**

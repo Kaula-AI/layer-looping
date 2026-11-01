@@ -1,0 +1,39 @@
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+group                                                       n    gain  helped safeSkip best_repeat   best_skip   best_swap  best_block   best_exit
+token_t=digit                                            3392  0.3043   44.8%   100.0%       14.9%       24.2%        4.2%        0.0%        1.6%
+token_t=function word                                    3363  0.7766   85.8%   100.0%       38.4%       34.6%        9.8%        0.0%        3.0%
+token_t=operator                                         1472  0.3822   46.2%   100.0%       14.9%       26.5%        2.9%        0.0%        1.9%
+token_t=punct                                            1899  0.7800   82.0%   100.0%       35.8%       33.0%       10.8%        0.0%        2.4%
+token_t=whitespace/newline                               1136  0.8502   71.0%   100.0%       32.7%       30.0%        5.3%        0.0%        3.1%
+token_t=word continuation                                1536  0.8265   72.7%   100.0%       36.1%       25.8%        8.2%        0.4%        2.1%
+token_t=word start                                       7642  0.6639   77.6%   100.0%       34.9%       32.4%        8.4%        0.0%        1.9%
+next=digit                                               3392  0.2300   39.2%   100.0%       13.9%       20.2%        3.3%        0.0%        1.8%
+next=function word                                       3363  0.5474   81.4%   100.0%       29.7%       33.4%       16.9%        0.1%        1.4%
+next=n/a                                                   40  0.4835   60.0%   100.0%       22.5%       30.0%        7.5%        0.0%        0.0%
+next=operator                                            1472  0.4750   54.5%   100.0%       17.1%       31.5%        3.8%        0.0%        2.1%
+next=punct                                               1899  0.7085   80.9%   100.0%       35.5%       34.8%        9.0%        0.0%        1.6%
+next=whitespace/newline                                  1136  0.4141   68.7%   100.0%       21.8%       39.2%        6.0%        0.0%        1.7%
+next=word continuation                                   1496  0.7268   55.6%   100.0%       30.3%       18.7%        4.7%        0.0%        1.8%
+next=word start                                          7642  0.8837   84.5%   100.0%       41.6%       33.3%        6.5%        0.1%        2.9%
+predicts first answer token                                52  1.3226  100.0%   100.0%       44.2%       34.6%       13.5%        0.0%        7.7%
+source=gsm                                              10220  0.4158   52.9%   100.0%       21.0%       25.2%        4.9%        0.0%        1.7%
+source=wiki                                             10220  0.8559   89.0%   100.0%       40.5%       35.6%       10.2%        0.0%        2.6%
+position 0-16                                             640  1.3914   95.5%   100.0%       49.5%       30.2%       11.7%        0.9%        3.1%
+position 16-64                                           1920  0.8576   87.4%   100.0%       38.1%       37.4%        8.8%        0.0%        3.1%
+position 64-256                                          7680  0.6361   73.9%   100.0%       32.1%       32.5%        7.2%        0.0%        2.1%
+position 256-10000                                      10200  0.5465   64.1%   100.0%       27.2%       27.6%        7.3%        0.0%        2.0%
+base NLL quintile 1                                      4088  0.0037    0.0%   100.0%        0.0%        0.0%        0.0%        0.0%        0.0%
+base NLL quintile 2                                      4088  0.0718   54.7%   100.0%       11.9%       40.1%        2.0%        0.0%        0.7%
+base NLL quintile 3                                      4088  0.4371  100.0%   100.0%       32.6%       55.9%        9.2%        0.0%        2.2%
+base NLL quintile 4                                      4088  0.9677  100.0%   100.0%       49.5%       34.1%       13.9%        0.0%        2.5%
+base NLL quintile 5                                      4088  1.6988  100.0%   100.0%       59.8%       22.0%       12.6%        0.1%        5.5%
+source=gsm (next-type mix matched to gsm)               10220  0.4158
+source=wiki (next-type mix matched to gsm)              10220  0.7751
+source=gsm (excluding whitespace/newline targets)        9402  0.4205   52.1%   100.0%       21.2%       24.3%        4.9%        0.0%        1.7%
+source=wiki (excluding whitespace/newline targets)       9902  0.8658   89.1%   100.0%       40.9%       35.2%       10.3%        0.0%        2.7%

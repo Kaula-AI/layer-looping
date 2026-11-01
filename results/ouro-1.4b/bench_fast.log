@@ -1,0 +1,77 @@
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 1118.03it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  arc_challenge: 0/3999 sequences, 0.1 min
+  arc_challenge: 640/3999 sequences, 0.9 min
+  arc_challenge: 1280/3999 sequences, 1.5 min
+  arc_challenge: 1920/3999 sequences, 2.1 min
+  arc_challenge: 2560/3999 sequences, 2.9 min
+  arc_challenge: 3200/3999 sequences, 3.5 min
+  arc_challenge: 3840/3999 sequences, 4.2 min
+arc_challenge  base           acc 0.487 [0.456,0.518]  acc_norm 0.516 [0.485,0.549]  layers/tok   96.0
+arc_challenge  rounds:3       acc 0.478 [0.447,0.508]  acc_norm 0.502 [0.471,0.535]  layers/tok   72.0
+arc_challenge  rounds:5       acc 0.487 [0.455,0.518]  acc_norm 0.519 [0.490,0.552]  layers/tok  120.0
+arc_challenge  gate:0.2       acc 0.478 [0.447,0.510]  acc_norm 0.512 [0.481,0.542]  layers/tok   71.9
+arc_challenge  gate:0.5       acc 0.484 [0.454,0.515]  acc_norm 0.511 [0.480,0.543]  layers/tok   89.3
+  (arc_challenge: 4.5 min)
+  arc_easy: 0/4000 sequences, 0.2 min
+  arc_easy: 640/4000 sequences, 0.8 min
+  arc_easy: 1280/4000 sequences, 1.5 min
+  arc_easy: 1920/4000 sequences, 2.1 min
+  arc_easy: 2560/4000 sequences, 2.8 min
+  arc_easy: 3200/4000 sequences, 3.4 min
+  arc_easy: 3840/4000 sequences, 4.1 min
+arc_easy       base           acc 0.806 [0.781,0.830]  acc_norm 0.784 [0.757,0.810]  layers/tok   96.0
+arc_easy       rounds:3       acc 0.782 [0.757,0.808]  acc_norm 0.746 [0.717,0.772]  layers/tok   72.0
+arc_easy       rounds:5       acc 0.808 [0.784,0.833]  acc_norm 0.787 [0.760,0.811]  layers/tok  120.0
+arc_easy       gate:0.2       acc 0.805 [0.781,0.829]  acc_norm 0.782 [0.755,0.807]  layers/tok   72.6
+arc_easy       gate:0.5       acc 0.810 [0.785,0.834]  acc_norm 0.784 [0.757,0.809]  layers/tok   89.6
+  (arc_easy: 4.4 min)
+  hellaswag: 0/4000 sequences, 0.4 min
+  hellaswag: 640/4000 sequences, 1.0 min
+  hellaswag: 1280/4000 sequences, 1.7 min
+  hellaswag: 1920/4000 sequences, 2.3 min
+  hellaswag: 2560/4000 sequences, 3.0 min
+  hellaswag: 3200/4000 sequences, 3.6 min
+  hellaswag: 3840/4000 sequences, 4.3 min
+hellaswag      base           acc 0.563 [0.533,0.596]  acc_norm 0.714 [0.684,0.742]  layers/tok   96.0
+hellaswag      rounds:3       acc 0.568 [0.537,0.600]  acc_norm 0.709 [0.679,0.737]  layers/tok   72.0
+hellaswag      rounds:5       acc 0.558 [0.528,0.590]  acc_norm 0.711 [0.684,0.739]  layers/tok  120.0
+hellaswag      gate:0.2       acc 0.565 [0.534,0.597]  acc_norm 0.711 [0.680,0.739]  layers/tok   65.8
+hellaswag      gate:0.5       acc 0.562 [0.532,0.595]  acc_norm 0.719 [0.690,0.747]  layers/tok   82.9
+  (hellaswag: 4.6 min)
+  mmlu: 0/4000 sequences, 0.5 min
+  mmlu: 640/4000 sequences, 1.2 min
+  mmlu: 1280/4000 sequences, 1.9 min
+  mmlu: 1920/4000 sequences, 2.5 min
+  mmlu: 2560/4000 sequences, 3.1 min
+  mmlu: 3200/4000 sequences, 3.8 min
+  mmlu: 3840/4000 sequences, 4.5 min
+Traceback (most recent call last):
+  File "/workspace/ll/bench.py", line 278, in <module>
+    main()
+  File "/workspace/ll/bench.py", line 220, in main
+    out, rows, run_rows, lp_of = answer_logprobs(g, batch, a.policies, R, seqs, dev)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/torch/utils/_contextlib.py", line 120, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ll/bench.py", line 116, in answer_logprobs
+    hs, kvs, attn_ent, cs = g.base_pass(ids)
+                            ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/torch/utils/_contextlib.py", line 120, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ll/oracle.py", line 234, in base_pass
+    h, kv, ent = self.layer(li, h, cs, own_kv=own, want_entropy=True)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ll/oracle.py", line 224, in layer
+    ent = -(p * torch.log(p.clamp_min(1e-12))).sum(-1).mean(1) if want_entropy else None  # B,T
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.03 GiB. GPU 0 has a total capacity of 79.25 GiB of which 1.25 GiB is free. Including non-PyTorch memory, this process has 72.59 GiB memory in use. Process 9134 has 5.39 GiB memory in use. Of the allocated memory 63.62 GiB is allocated by PyTorch, and 8.48 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

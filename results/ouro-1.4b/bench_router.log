@@ -1,0 +1,23 @@
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 1358.26it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  arc_challenge: 0/2000 sequences, 0.1 min
+  arc_challenge: 640/2000 sequences, 20.5 min
+  arc_challenge: 1280/2000 sequences, 46.2 min
+  arc_challenge: 1920/2000 sequences, 73.1 min
+arc_challenge  base           acc 0.474 [0.430,0.520]  acc_norm 0.480 [0.436,0.526]  layers/tok   96.0
+arc_challenge  router:0       acc 0.450 [0.406,0.496]  acc_norm 0.476 [0.432,0.520]  layers/tok   96.4
+arc_challenge  shuffled:0     acc 0.458 [0.412,0.506]  acc_norm 0.484 [0.440,0.530]  layers/tok   96.4
+arc_challenge  router:0.001   acc 0.452 [0.408,0.496]  acc_norm 0.472 [0.426,0.516]  layers/tok   96.1
+arc_challenge  shuffled:0.001 acc 0.456 [0.410,0.502]  acc_norm 0.488 [0.444,0.532]  layers/tok   96.1
+  (arc_challenge: 140.2 min)
+  hellaswag: 0/2000 sequences, 0.0 min
+  hellaswag: 640/2000 sequences, 4.0 min
+  hellaswag: 1280/2000 sequences, 16.2 min
+  hellaswag: 1920/2000 sequences, 33.4 min

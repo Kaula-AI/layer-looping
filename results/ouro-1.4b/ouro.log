@@ -1,0 +1,14 @@
++ export MODEL=ByteDance/Ouro-1.4B HF_DATASETS_DISABLE_PROGRESS_BARS=1
++ MODEL=ByteDance/Ouro-1.4B
++ HF_DATASETS_DISABLE_PROGRESS_BARS=1
++ O=ouro_quick
++ mkdir -p ouro_quick
++ python oracle.py --model ByteDance/Ouro-1.4B --check
++ python oracle.py --model ByteDance/Ouro-1.4B --n_tokens 20000 --save_conf --out ouro_quick
++ python probe.py --path ouro_quick/oracle.npz --out_dir ouro_quick
++ python ouro_compare.py --path ouro_quick/oracle.npz --results ouro_quick/results.json
++ python selfselect.py --path ouro_quick/oracle.npz
++ python analyze_tokens.py --model ByteDance/Ouro-1.4B --path ouro_quick/oracle.npz --out_dir ouro_quick
++ bash run_experiments.sh programs-quick
++ echo OURO_DONE
+OURO_DONE
