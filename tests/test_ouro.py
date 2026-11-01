@@ -147,3 +147,32 @@ def test_bench_batched_scoring():
         ind = -G.independent_program_nll(hs, x, extra, t, 0)
         assert abs(out["rounds:4"][0][k] - ind) < NTOL, (b, t)
     assert (out["rounds:4"][1] == len(extra)).all() and (out["gate:2.0"][1] == L).all()
+
+
+@torch.no_grad()
+def test_routed_ouro_paths():
+    """routed_ouro: at init (every head says 'once') the routed model is the reference model; forcing
+    'twice' / 'skip' at one virtual layer equals running that layer twice / not at all for every token."""
+    from routed_ouro import RoutedOuro
+
+    rm = RoutedOuro(MODEL, protect=1).double()
+    lg, lay, _, _ = rm(IDS, hard_eval=True)
+    assert (lg - MODEL(IDS).logits).abs().max() < 1e-4 and (lay == L).all()
+    m = MODEL.model
+    pos = torch.arange(IDS.shape[1])[None].expand(IDS.shape[0], -1)
+    for j, act in ((4, 2), (5, 0)):
+        with torch.no_grad():
+            rm.heads.bias.view(L, 3)[j] = torch.tensor([3.0, -3.0, -3.0] if act == 0 else [-3.0, -3.0, 3.0])
+        lg, lay, _, _ = rm(IDS, hard_eval=True)
+        rm.heads.bias.view(L, 3)[j] = torch.tensor([-3.0, 3.0, -3.0])
+        x = m.embed_tokens(IDS)
+        cos, sin = m.rotary_emb(x, pos)
+        for i in range(L):
+            if i > 0 and i % N == 0:
+                x = m.norm(x)
+            reps = act if i == j else 1
+            for _ in range(reps):
+                x = MODEL._layer(m.layers[i % N], x, cos, sin)
+        ref = MODEL.lm_head(m.norm(x))
+        assert (lg - ref).abs().max() < 1e-4, (j, act)  # SDPA vs manual attention rounding
+        assert (lay == L - 1 + act).all()

@@ -17,6 +17,7 @@ Policies (each reports accuracy with a 95% bootstrap CI and mean layer applicati
   static:NAME      every answer token runs one program from the router file, e.g. static:repeat@40x2
   router:lam       the trained ridge router (probe.py's router_lag_interp.npz) on token t-1's base-pass
                    features: argmin predicted dNLL + lam * cost, edits only where that is < 0
+  routed           a routed_ouro.py checkpoint (--weights) with its trained router, hard decisions
   shuffled:lam     control: the router's choices for the whole task, randomly permuted across answer
                    tokens (same edits, same compute, no token-level signal)
 
@@ -105,7 +106,7 @@ def prog_name(R, c):
 
 # ---------------------------------------------------------------- scoring
 @torch.no_grad()
-def answer_logprobs(g, batch, policies, R, seqs, dev):
+def answer_logprobs(g, batch, policies, R, seqs, dev, rmodel=None):
     """batch: list of (ids list, n answer tokens). Returns {policy: list of (per-token logprobs, layers per
     token)} for every sequence, plus the raw router choices (program index or -1) per answer token."""
     L = len(g.layers)
@@ -144,6 +145,10 @@ def answer_logprobs(g, batch, policies, R, seqs, dev):
         kind, _, arg = pol.partition(":")
         if kind == "base":
             lp, lay = lp_of(hs[-1][bi, ti]), np.full(len(rows), float(L))
+        elif kind == "routed":  # stage-2 model: its trained router picks each token's path in-pass
+            lg, lr_, _, _ = rmodel(ids, hard_eval=True)
+            lp = lg[bi, ti].float().log_softmax(-1).gather(-1, tgt[:, None])[:, 0].cpu().numpy()
+            lay = lr_[bi, ti].float().cpu().numpy()
         elif kind == "rounds" and int(arg) <= g.rounds:
             n = g.n_phys * int(arg)
             lp, lay = lp_of(hs[n][bi, ti]), np.full(len(rows), float(n))
@@ -180,6 +185,7 @@ def main():
     p.add_argument("--n", type=int, default=500, help="items per task (fixed random subset)")
     p.add_argument("--policies", nargs="+", default=["base", "gate:0.5", "router:0", "shuffled:0"])
     p.add_argument("--batch", type=int, default=32, help="sequences per batched pass")
+    p.add_argument("--weights", default=None, help="routed_ouro.py model.pt: fine-tuned weights (+ router)")
     p.add_argument("--out", default="bench_out")
     a = p.parse_args()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -187,12 +193,22 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     tok = AutoTokenizer.from_pretrained(a.model)
     model = load_causal_lm(a.model, torch.bfloat16, attn_implementation="eager").to(dev).eval()
+    rmodel = None
+    if a.weights:
+        from routed_ouro import RoutedOuro
+
+        ck = torch.load(a.weights, map_location=dev)
+        model.load_state_dict(ck["ouro"])
+        if ck["use_router"]:
+            rmodel = RoutedOuro(model).to(dev).eval()
+            rmodel.heads.load_state_dict(ck["heads"])
     g = make_g(model)
     R = dict(np.load(a.router)) if a.router else None
     seqs = program_seqs(R) if R is not None else None
     for pol in a.policies:
         kind = pol.split(":")[0]
-        assert kind in ("base", "rounds", "gate", "static", "router", "shuffled"), pol
+        assert kind in ("base", "rounds", "gate", "static", "router", "shuffled", "routed"), pol
+        assert kind != "routed" or rmodel is not None, "routed needs --weights from a router checkpoint"
         assert kind not in ("rounds", "gate") or isinstance(g, GO), f"{pol} needs a looped model"
         assert kind not in ("static", "router", "shuffled") or R is not None, f"{pol} needs --router"
     L = len(g.layers)
@@ -217,7 +233,7 @@ def main():
                 print(f"  {task}: {s0}/{len(order)} sequences, {(time.time() - t0) / 60:.1f} min", flush=True)
             idx = order[s0: s0 + a.batch]
             batch = [seq_list[i] for i in idx]
-            out, rows, run_rows, lp_of = answer_logprobs(g, batch, a.policies, R, seqs, dev)
+            out, rows, run_rows, lp_of = answer_logprobs(g, batch, a.policies, R, seqs, dev, rmodel)
             seg = np.cumsum([0] + [na for _, na in batch])
             for pol in a.policies:
                 kind, _, arg = pol.partition(":")
