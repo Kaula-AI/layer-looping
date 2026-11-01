@@ -240,7 +240,8 @@ for nm, X in sets.items():
           + " ".join(f"{o}:{v:.0%}" for o, v in used.items()))
     if nm == "lag_interp":
         np.savez(os.path.join(a.out_dir, "router_lag_interp.npz"), mean=sc.mean_, scale=sc.scale_, coef=m.coef_,
-                 intercept=m.intercept_, cfg_op=op, cfg_layer=lay, cfg_k=kk, cfg_cost=cost)
+                 intercept=m.intercept_, cfg_op=op, cfg_layer=lay, cfg_k=kk, cfg_cost=cost,
+                 cfg_end=d["cfg_end"] if "cfg_end" in d else lay, n_layers=L)
 
 # ---------------------------------------------------------------- prior-work heuristic baselines
 # Training-free per-token rules in the spirit of EGLR (arXiv 2606.16620: re-apply top layers when the

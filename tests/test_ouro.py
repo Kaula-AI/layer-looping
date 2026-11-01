@@ -118,3 +118,26 @@ def test_run_paths_matches_independent():
         for t in range(T - 1):
             ref = G.independent_program_nll(hs, ids, paths[b][t], t, b)
             assert abs(nll[b, t] - ref) < NTOL, (b, t, paths[b][t], nll[b, t].item(), ref.item())
+
+
+@torch.no_grad()
+def test_bench_decode_matches_base():
+    """bench.py: prompt prefilled from the base pass, answer tokens decoded one by one on the base path
+    (and with the gate never firing) give the base pass's log-likelihood."""
+    from bench import step_gate
+    from decode import Cache, step_path
+
+    ids = IDS[:1]
+    T, p0 = ids.shape[1], 7
+    hs, kvs, _, _ = G.base_pass(ids)
+    ref = G.logits(hs[-1][0, p0:T - 1]).log_softmax(-1).gather(-1, ids[0, p0 + 1:, None])[:, 0]
+    for mode in ("path", "gate"):
+        cache = Cache(L)
+        for li in range(L):
+            cache.k[li], cache.v[li] = kvs[li][0][:, :, :p0], kvs[li][1][:, :, :p0]
+        out = []
+        for t in range(p0, T - 1):
+            h = step_path(G, cache, ids[:, t], t, list(range(L))) if mode == "path" else \
+                step_gate(G, cache, ids[:, t], t, 2.0)[0]
+            out.append(G.logits(h[:, 0]).log_softmax(-1)[0, ids[0, t + 1]])
+        assert (torch.stack(out) - ref).abs().max() < NTOL, mode
