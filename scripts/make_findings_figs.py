@@ -115,8 +115,72 @@ def fig_gate_vs_router():
     plt.close(fig)
 
 
+DIAG = "results/ouro-1.4b/stage2/router72_frozen_v2/diag_frozen/diagnose.json"
+
+
+def fig_compute_curve():
+    """Held-out NLL vs layers per token: Ouro's gate, fixed rounds, and our router with its controls."""
+    d = load(DIAG)
+    pts = {c["policy"]: c for c in d["curve"]}
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    gate = sorted([c for c in d["curve"] if c["policy"].startswith("gate")], key=lambda c: c["layers"])
+    ax.plot([c["layers"] for c in gate], [c["nll"] for c in gate], "-o", color=BLUE, lw=2, ms=6, mec=SURFACE, mew=1.5,
+            label="Ouro's trained exit gate (thresholds 0.05–0.9)")
+    rnd = [pts[f"rounds:{r}"] for r in (2, 3, 4)]
+    ax.plot([c["layers"] for c in rnd], [c["nll"] for c in rnd], "s", color=AQUA, ms=8, mec=SURFACE, mew=1.5,
+            label="Fixed rounds for every token")
+    for r, c in zip((2, 3, 4), rnd):
+        ax.annotate(f"{r} rounds", (c["layers"], c["nll"]), xytext=(6, 8), textcoords="offset points", fontsize=9, color=INK2)
+    router = [("router_argmax", "our router"), ("router_static_schedule", "same router, one schedule for all tokens"),
+              ("router_shuffled", "router decisions shuffled across tokens"), ("router_sampled", "router, sampled as in training")]
+    for k, lab in router:
+        c = pts[k]
+        ax.plot(c["layers"], c["nll"], "D", color=ORANGE, ms=8, mec=SURFACE, mew=1.5)
+        ax.annotate(lab, (c["layers"], c["nll"]), xytext=(9, -3), textcoords="offset points", fontsize=9, color=INK2)
+    ax.set_xlabel("Layers per token (of 96)")
+    ax.set_ylabel("Held-out loss (nats per token)")
+    ax.set_xlim(44, 128)
+    ax.set_ylim(2.32, 2.68)
+    ax.grid(color=GRID, lw=0.8)
+    ax.set_axisbelow(True)
+    ax.plot([], [], "D", color=ORANGE, ms=8, label="Our trained per-layer router (Ouro frozen)")
+    ax.legend(loc="upper right", frameon=False, fontsize=9)
+    ax.set_title("At any compute, Ouro's gate has lower loss than our router")
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig3_compute_curve.png"), dpi=200)
+    plt.close(fig)
+
+
+def fig_skip_map():
+    """Where the router skips: rate per virtual layer, by round."""
+    d = load(DIAG)
+    sk = np.array(d["skip_rate_by_layer"])
+    n = len(sk) // 4
+    fig, ax = plt.subplots(figsize=(8, 3.4))
+    x = np.arange(len(sk))
+    ax.bar(x, sk, width=0.8, color=ORANGE)
+    for r in range(1, 4):
+        ax.axvline(r * n - 0.5, color=INK2, lw=1, ls=(0, (2, 3)))
+    for r in range(4):
+        ax.text(r * n + n / 2, 1.08, f"Round {r + 1}: {100 * sk[r * n:(r + 1) * n].mean():.0f}% skipped", ha="center",
+                fontsize=9.5, color=INK2)
+    ax.set_xlim(-1, len(sk))
+    ax.set_ylim(0, 1.18)
+    ax.set_yticks([0, 0.5, 1], ["0%", "50%", "100%"])
+    ax.set_xlabel("Ouro's 96 unrolled layers (24 layers × 4 rounds)")
+    ax.set_ylabel("Tokens skipping")
+    ax.grid(axis="y", color=GRID, lw=0.8)
+    ax.set_axisbelow(True)
+    ax.set_title("Our router cuts the middle of round 3 and never touches round 4", pad=22)
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig4_skip_map.png"), dpi=200)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     fig_hindsight()
     fig_gate_vs_router()
+    fig_compute_curve()
+    fig_skip_map()
     print("wrote", sorted(os.listdir(OUT)))

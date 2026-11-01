@@ -1,6 +1,6 @@
 # Can a language model choose its own layers, token by token?
 
-*Kāula research note. Draft, November 2026. Code and every number below: this repository.*
+*Kāula research note, November 1, 2026. Code, data and every number below: [github.com/Kaula-AI/layer-looping](https://github.com/Kaula-AI/layer-looping).*
 
 A transformer runs every token through the same fixed stack of layers. We wanted to know whether that has to be so. Could each token take its own path through the network: loop a layer three times, skip the next, revisit an earlier one? Hard tokens would get more depth and easy tokens less.
 
@@ -11,7 +11,7 @@ We tested this on four models, from GPT-2 to a model trained to loop. Benchmarks
 - **In hindsight, per-token paths look very powerful.** If you choose each token's layer edit after seeing the answer, the loss drops by 0.6 to 0.9 nats per token at no extra compute, on every model we tried.
 - **No router could choose those paths in advance.** Linear and MLP routers, interpretability features, raw hidden states, confidence-based self-selection and training-free rules from prior work all failed to beat "no edit" when fitted to a frozen model. Most of the hindsight gain comes from picking the best of many small perturbations after seeing the answer.
 - **Per-token compute does pay off when the router is trained with the model.** Ouro-1.4B was pretrained to loop and has a learned exit gate. That gate beats a fixed compute budget on ARC-Easy by +3.6 points at the same compute (paired p < 0.0001) and matches full-compute accuracy elsewhere with 14–33% fewer layers.
-- **Our finer-grained router lost to that coarse gate.** We trained a per-layer router (skip, run once or run twice at each of Ouro's 96 unrolled layers) for about 10M tokens. It was worse than Ouro's built-in gate on 4 of 5 benchmarks while using more compute.
+- **Our finer-grained router lost to that coarse gate.** We trained a per-layer router (skip, run once or run twice at each of Ouro's 96 unrolled layers) for about 10M tokens. It was worse than Ouro's built-in gate on 4 of 5 benchmarks while using more compute. A diagnostic shows why: it gives *less* compute to hard tokens, and per-layer decisions never discovered the cheapest saving, dropping the last round.
 
 ## The idea
 
@@ -71,15 +71,35 @@ We then trained our own router with the model's loss. At every one of Ouro's 96 
 - **With LoRA:** the router matched the LoRA-only control's full-compute (96-layer) accuracy on MMLU and Winogrande at 23% less compute. But the 10M-token LoRA fine-tune itself cost 4 MMLU points, so the result is still behind the original Ouro with its gate.
 - **With Ouro frozen (router only):** worse than Ouro's gate on 4 of 5 tasks (ARC-C −3.2, ARC-E −1.8, HellaSwag −3.1, MMLU −4.4, all p < 0.05). Winogrande was +0.8, not significant. It also used *more* layers at evaluation (79–84) than in training (74), because argmax decisions differ from the sampled ones it trained on.
 
+## Finding 5: why our router lost
+
+We ran the retrained router (held-out loss 2.417, matching the first run) against Ouro's gate on 32 held-out FineWeb-Edu chunks of 1,024 tokens.
+
+![Compute curve](figures/fig3_compute_curve.png)
+
+*Held-out loss against layers per token. Blue: Ouro's gate at thresholds 0.05 to 0.9. Green: every token runs the same number of rounds. Orange: our router and three controls.*
+
+- **It sits above even fixed compute.** At 78 layers per token its loss is 2.433. Running 3 rounds for every token (72 layers) gives 2.368, and Ouro's gate gives 2.351 at 70 layers.
+- **It gives less compute to hard tokens.** Each token's layer count correlates *negatively* with how hard the token is for the base model (Spearman −0.23). Ouro's gate does the opposite (+0.42 at threshold 0.2).
+- **It routes per token, a little.** 96% of its decisions match each layer's majority action. But replacing them with that one fixed schedule raises the loss from 2.433 to 2.542, and shuffling its decisions across tokens raises it to 2.573. The per-token signal is real; it just points the wrong way overall.
+- **It never found the cheapest saving.**
+
+![Skip map](figures/fig4_skip_map.png)
+
+*Share of tokens skipping each of Ouro's 96 unrolled layers.*
+
+The 4th round is worth only 0.025 nats per token on average, so dropping it whole is the cheapest compute to give up, and that is what Ouro's gate does. Our router skips 0% of round 4 and instead removes the middle of round 3, which costs more. It also never chose "run twice". Our reading, not yet tested directly: a head deciding one layer at a time sees that skipping any *single* late layer hurts, and can't see that skipping all 24 of them together is nearly free. Independent per-layer decisions trained with straight-through gradients have no way to discover coordinated, multi-layer actions like "stop here."
+- **Training and evaluation disagree.** With decisions sampled as in training, the router uses 74 layers at a loss of 2.605. With its most likely decisions (how it is benchmarked) it uses 78 layers at 2.433.
+
 ## What we take from this
 
 1. **Per-token compute allocation is real, but it has to be learned jointly with the model.** Fitting a router to a frozen network finds nothing; a gate trained alongside the network finds benchmark-level gains.
-2. **The useful granularity so far is coarse.** "How many rounds" beat "which layer, how many times," even though the second strictly contains the first. More options made the hindsight gain bigger and the learned policy worse.
+2. **The useful granularity so far is coarse.** "How many rounds" beat "which layer, how many times," even though the second strictly contains the first. More options made the hindsight gain bigger and the learned policy worse: the per-layer router never discovered the coordinated "stop after round 3" that the gate gets for free.
 3. **Hindsight oracles mislead here.** A per-token oracle over many edits measures how often *some* perturbation happens to favor the right token. Report it, but don't read it as reachable headroom.
 
 ## Open questions
 
-- **Why does the per-layer router lose?** Our next diagnostic checks whether it routes per token at all or learned one fixed schedule, whether its compute tracks token difficulty, and where it skips.
+- **Structured actions.** A router whose choices are whole spans ("stop after this round," "repeat this block") rather than single layers would see the cheap, coordinated savings that per-layer decisions miss.
 - **Does any of this hold at larger scale?** The next target is a loop-converted Qwen3-8B (LoopUS, arXiv 2605.11011), whose built-in halting is decided per sequence rather than per token.
 
 ## Limitations
@@ -99,5 +119,6 @@ python oracle.py --model ByteDance/Ouro-1.4B --n_tokens 20000 --out ouro_quick &
 python bench.py --model ByteDance/Ouro-1.4B --policies base rounds:3 gate:0.2 --out bench   # benchmarks
 python routed_ouro.py --variant router --no_lora --target_layers 72 --out r5/router72_frozen  # our router
 python bench_compare.py --dir bench ... --a gate:0.2 --b rounds:3 --metric acc_norm        # paired tests
+python diagnose_router.py --ckpt r5/router72_frozen/model.pt --out diag                     # why the router lost
 python scripts/make_findings_figs.py                                      # these figures
 ```
