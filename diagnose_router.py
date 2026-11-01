@@ -42,7 +42,8 @@ def main():
     tok = AutoTokenizer.from_pretrained(a.model)
     ouro = load_ouro(a.model, torch.bfloat16).cuda()
     ck = torch.load(a.ckpt, map_location="cuda")
-    ouro.load_state_dict(ck["ouro"])
+    if "ouro" in ck:  # full checkpoint; a heads-only file means the original (frozen) Ouro weights
+        ouro.load_state_dict(ck["ouro"])
     rm = RoutedOuro(ouro).cuda().eval()
     rm.heads.load_state_dict(ck["heads"])
     n, R, V = rm.n, rm.R, rm.V
@@ -50,7 +51,7 @@ def main():
     assert a.n_chunks <= 64
     chunks = fineweb_chunks(tok, a.seq_len, a.n_chunks)
 
-    res = {k: [] for k in ["base", "gate_p", "rounds_nll", "argmax", "argmax_lay", "sampled", "sampled_lay",
+    res = {k: [] for k in ["gate_p", "rounds_nll", "argmax", "argmax_lay", "sampled", "sampled_lay",
                            "static", "shuffled", "acts"]}
     for i in range(0, len(chunks), a.batch):
         ids = torch.tensor(chunks[i: i + a.batch], device="cuda")
