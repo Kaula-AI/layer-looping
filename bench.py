@@ -122,15 +122,16 @@ def answer_logprobs(g, batch, policies, R, seqs, dev):
     def lp_of(h_rows):  # h_rows: (n, d) final states of the scored rows
         return g.logits(h_rows).log_softmax(-1).gather(-1, tgt[:, None])[:, 0].float().cpu().numpy()
 
-    def run_rows(paths):  # paths: list (one per scored row) of layer lists; others follow the base path
-        S = max(len(p_) for p_ in paths)
-        P = torch.arange(L, device=dev).repeat(B, T, 1)
-        if S > L:
-            P = torch.cat([P, torch.full((B, T, S - L), -1, device=dev)], -1)
-        for (b, t), p_ in zip(rows, paths):
-            P[b, t] = -1
-            P[b, t, : len(p_)] = torch.tensor(p_, device=dev)
-        return g.run_paths(hs, kvs, cs, P)[bi, ti]
+    def run_rows(paths):  # paths: one layer list per scored row; each distinct path runs once over the batch
+        out = hs[-1][bi, ti].clone()
+        groups = {}
+        for k, p_ in enumerate(paths):
+            if p_ != list(range(L)):
+                groups.setdefault(tuple(p_), []).append(k)
+        for p_, ks in groups.items():
+            ks_t = torch.tensor(ks, device=dev)
+            out[ks_t] = g.run_program(hs, kvs, cs, list(p_))[bi[ks_t], ti[ks_t]]
+        return out
 
     choice = None
     if any(p_.split(":")[0] in ("router", "shuffled") for p_ in policies):
@@ -212,6 +213,8 @@ def main():
         tok_lay = {pol: [None] * len(seq_list) for pol in a.policies}
         pending = {}
         for s0 in range(0, len(order), a.batch):
+            if s0 // a.batch % 20 == 0:
+                print(f"  {task}: {s0}/{len(order)} sequences, {(time.time() - t0) / 60:.1f} min", flush=True)
             idx = order[s0: s0 + a.batch]
             batch = [seq_list[i] for i in idx]
             out, rows, run_rows, lp_of = answer_logprobs(g, batch, a.policies, R, seqs, dev)
