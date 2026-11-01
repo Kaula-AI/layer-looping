@@ -173,11 +173,12 @@ def main():
     p.add_argument("--batch", type=int, default=8)
     p.add_argument("--steps", type=int, default=1200)
     p.add_argument("--lr", type=float, default=2e-4)
-    p.add_argument("--head_lr", type=float, default=1e-2, help="router head biases")
-    p.add_argument("--head_w_lr", type=float, default=1e-4,
+    p.add_argument("--head_lr", type=float, default=3e-3, help="router head biases")
+    p.add_argument("--head_w_lr", type=float, default=1e-5,
                    help="router head weights: Adam moves all d inputs at once, so a logit moves ~lr*d per step")
     p.add_argument("--rank", type=int, default=16)
-    p.add_argument("--lag_lr", type=float, default=0.05, help="Lagrange multiplier step (per layer of excess)")
+    p.add_argument("--mu", type=float, default=2.0, help="budget penalty: mu * (excess / (L - target))^2")
+    p.add_argument("--anneal", type=float, default=0.4, help="fraction of steps over which the target anneals")
     p.add_argument("--tau", type=float, nargs=2, default=[1.0, 0.3])
     p.add_argument("--eval_chunks", type=int, default=64)
     p.add_argument("--seed", type=int, default=0)
@@ -214,7 +215,7 @@ def main():
     chunks = fineweb_chunks(tok, a.seq_len, n_train + a.eval_chunks)
     ev, tr = chunks[: a.eval_chunks], chunks[a.eval_chunks:]
     print(f"train {len(tr)} chunks, eval {len(ev)}", flush=True)
-    lag = 0.0
+    lag = 0.0  # logged: current normalised excess over the annealed target
     log = {"args": vars(a), "steps": []}
     t0 = time.time()
     model.train()
@@ -226,9 +227,10 @@ def main():
         ce = F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]), ids[:, 1:].reshape(-1))
         loss = ce
         if a.variant == "router":
-            excess = (model.V + exp_cost.mean()) - a.target_layers  # expected layers - target
-            loss = loss + lag * excess
-            lag = max(0.0, lag + a.lag_lr * float(layers_run.mean() - a.target_layers) / model.V)
+            tgt = model.V - (model.V - a.target_layers) * min(1.0, step / max(1, a.anneal * a.steps))
+            excess = ((model.V + exp_cost.mean()) - tgt) / max(1.0, model.V - a.target_layers)
+            loss = loss + a.mu * excess ** 2
+            lag = float(excess)
         loss.backward()
         torch.nn.utils.clip_grad_norm_([q for g_ in groups for q in g_["params"]], 1.0)
         opt.step()
