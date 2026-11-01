@@ -182,6 +182,7 @@ def main():
     p.add_argument("--out", default="bench_out")
     a = p.parse_args()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.set_grad_enabled(False)
     os.makedirs(a.out, exist_ok=True)
     tok = AutoTokenizer.from_pretrained(a.model)
     model = load_causal_lm(a.model, torch.bfloat16, attn_implementation="eager").to(dev).eval()
