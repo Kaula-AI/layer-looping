@@ -331,7 +331,7 @@ try:
         fr = pareto(res["frontiers"][nm])
         ax.plot([q["extra_layers"] for q in fr], [-q["dnll"] for q in fr], ls, color=c, label=nm, lw=2, marker=".", ms=3)
     st = res["frontiers"]["static"]
-    mk = {"repeat": "o", "skip": "v", "swap": "s", "block": "D"}
+    mk = {"repeat": "o", "skip": "v", "swap": "s", "block": "D", "exit": "x"}
     for o in OPS:
         pts = [q for q, oo in zip(st, op) if oo == o]
         ax.scatter([q["extra_layers"] for q in pts], [-q["dnll"] for q in pts], s=12, marker=mk.get(o, "."),

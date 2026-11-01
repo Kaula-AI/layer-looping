@@ -35,7 +35,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer
+from ouro_model import load_causal_lm
 from transformers.models.gemma2.modeling_gemma2 import rotate_half
 
 
@@ -466,11 +467,76 @@ class G4(G2):
         return h * layer.layer_scalar
 
 
+class _Unrolled(list):
+    """Virtual layer list for a looped model: entry j is physical layer j % n."""
+
+    def __init__(self, phys, rounds):
+        super().__init__([phys[j % len(phys)] for j in range(len(phys) * rounds)])
+
+
+class GO(G2):
+    """Manual Ouro (LoopLM, ByteDance) forward. Ouro runs its n physical layers `total_ut_steps` times,
+    with the final norm applied between rounds. Here that is unrolled into n * rounds VIRTUAL layers:
+    virtual layer j runs physical layer j % n and has its own K/V (Ouro caches each (round, layer) slot
+    separately). The between-round norm is the first op of virtual layers n, 2n, ...: it acts on the
+    layer input, so hs[n*s] is round s's raw output and logits(hs[n*s]) is exactly Ouro's exit at step s.
+    So `seq = range(n*s)` is an early exit after round s, and the block (n*(R-1))..(n*R-1) x2 is an
+    extra round with the last round's K/V for other positions."""
+
+    def __init__(self, model):
+        self.model = model
+        self.m = model.model
+        self.cfg = model.config
+        c = self.cfg
+        self.n_phys = c.num_hidden_layers
+        self.rounds = getattr(c, "total_ut_steps", 4)
+        self.layers = _Unrolled(self.m.layers, self.rounds)
+        self.norm = self.m.norm
+        self.lm_head = model.lm_head
+        self.nH, self.nKV, self.hd = c.num_attention_heads, c.num_key_value_heads, c.head_dim
+        self.scale = self.hd ** -0.5
+        self.attn_cap = None
+        self.final_cap = None
+        self.rotary = self.m.rotary_emb
+        self.src = list(range(len(self.layers)))
+        self.kv_sources = []
+        self._masks = {}
+
+    def embed(self, ids):
+        return self.m.embed_tokens(ids)
+
+    def _pre(self, li, x):
+        return self.norm(x) if li > 0 and li % self.n_phys == 0 else x
+
+    def _heads(self, li, x, cs):
+        return super()._heads(li, self._pre(li, x), cs)
+
+    def post(self, li, x, o, cs):
+        layer = self.layers[li]
+        x = self._pre(li, x)
+        h = x + layer.input_layernorm_2(layer.self_attn.o_proj(o))
+        return h + layer.post_attention_layernorm_2(layer.mlp(layer.post_attention_layernorm(h)))
+
+    @torch.no_grad()
+    def exit_gate_probs(self, hs):
+        """Ouro's learned per-token exit distribution over rounds (B, T, rounds), as in OuroForCausalLM."""
+        lam = [torch.sigmoid(self.m.early_exit_gate(self.norm(hs[self.n_phys * (s + 1)])).float()[..., 0])
+               for s in range(self.rounds)]
+        rem, pdf = torch.ones_like(lam[0]), []
+        for s, l_ in enumerate(lam):
+            p_ = l_ * rem if s < self.rounds - 1 else rem
+            rem = rem * (1 - l_)
+            pdf.append(p_)
+        return torch.stack(pdf, -1)
+
+
 def make_g(model):
-    """Manual forward for a loaded HF model: G4 for Gemma-4, G2 for Gemma-2."""
+    """Manual forward for a loaded HF model: G4 for Gemma-4, GO for Ouro, G2 for Gemma-2."""
     mt = model.config.model_type
     if mt.startswith("gemma4"):
         return G4(model)
+    if mt == "ouro":
+        return GO(model)
     assert mt == "gemma2", f"unsupported model type {mt!r}"
     return G2(model)
 
@@ -565,8 +631,7 @@ def main():
     torch.manual_seed(0)
     dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     tok = AutoTokenizer.from_pretrained(a.model)
-    model = AutoModelForCausalLM.from_pretrained(
-        a.model, torch_dtype=getattr(torch, a.dtype), attn_implementation="eager"
+    model = load_causal_lm(a.model, getattr(torch, a.dtype), attn_implementation="eager"
     ).to(dev).eval()
     g = make_g(model)
     sw = getattr(g.cfg, "sliding_window", None)
@@ -574,9 +639,15 @@ def main():
 
     L = len(g.layers)
     layers = a.layers if a.layers else list(range(L))
+    looped = isinstance(g, GO)
+    nP, R_ = (g.n_phys, g.rounds) if looped else (L, 1)
+    dflt = [f"{nP * (R_ - 1)}-{L - 1}x2"] if looped else [default_block(L)]  # Ouro: one extra round
     blocks = [tuple(int(v) for v in re.fullmatch(r"(\d+)-(\d+)x(\d+)", b_).groups())
-              for b_ in (a.blocks if a.blocks is not None else [default_block(L)])]
+              for b_ in (a.blocks if a.blocks is not None else dflt)]
     progs = build_programs(L, a.ops, a.repeats, layers, blocks)
+    if looped:  # early exit after round s (s = 1 .. R-1): exactly Ouro's own exit
+        progs += [dict(op="exit", layer=nP * s - 1, end=nP * s - 1, k=s, cost=-(L - nP * s), seq=list(range(nP * s)))
+                  for s in range(1, R_)]
     raw_layer = a.raw_layer if a.raw_layer is not None else L // 2
 
     n_tok = a.seq_len * a.batch if a.check else a.n_tokens
@@ -586,10 +657,11 @@ def main():
         return
 
     print(f"{len(chunks)} chunks x {a.seq_len} tokens, {len(progs)} programs "
-          f"({', '.join(f'{o}: {sum(p_['op'] == o for p_ in progs)}' for o in list(a.ops) + (['block'] if blocks else []))}), device {dev}", flush=True)
+          f"({', '.join(f'{o}: {sum(p_['op'] == o for p_ in progs)}' for o in list(a.ops) + (['block'] if blocks else []) + (['exit'] if looped else []))}), device {dev}", flush=True)
     os.makedirs(a.out, exist_ok=True)
     rec = {k: [] for k in ["delta", "feat", "base_nll", "raw", "tok", "chunk", "pos"]
-           + (["ent_edit", "top_edit", "ent_base", "top_base"] if a.save_conf else [])}
+           + (["ent_edit", "top_edit", "ent_base", "top_base"] if a.save_conf else [])
+           + (["exit_pdf"] if looped else [])}
     t0 = time.time()
     for bi in range(0, len(chunks), a.batch):
         ids = torch.tensor(chunks[bi : bi + a.batch], device=dev)
@@ -611,6 +683,8 @@ def main():
         rec["tok"].append(ids[:, :-1].cpu().numpy().reshape(-1))
         rec["chunk"].append(np.repeat(np.arange(bi, bi + B), T - 1))
         rec["pos"].append(np.tile(np.arange(T - 1), B))
+        if looped:
+            rec["exit_pdf"].append(g.exit_gate_probs(hs)[:, :-1].float().cpu().numpy().reshape(-1, g.rounds))
         if a.save_conf:
             rec["ent_edit"].append(ent_e.half().cpu().numpy().reshape(-1, len(progs)))
             rec["top_edit"].append(top_e.half().cpu().numpy().reshape(-1, len(progs)))
