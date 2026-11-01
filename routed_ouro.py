@@ -173,9 +173,11 @@ def main():
     p.add_argument("--batch", type=int, default=8)
     p.add_argument("--steps", type=int, default=1200)
     p.add_argument("--lr", type=float, default=2e-4)
-    p.add_argument("--head_lr", type=float, default=1e-2)
+    p.add_argument("--head_lr", type=float, default=1e-2, help="router head biases")
+    p.add_argument("--head_w_lr", type=float, default=1e-4,
+                   help="router head weights: Adam moves all d inputs at once, so a logit moves ~lr*d per step")
     p.add_argument("--rank", type=int, default=16)
-    p.add_argument("--lag_lr", type=float, default=0.2, help="Lagrange multiplier step (per layer of excess)")
+    p.add_argument("--lag_lr", type=float, default=0.05, help="Lagrange multiplier step (per layer of excess)")
     p.add_argument("--tau", type=float, nargs=2, default=[1.0, 0.3])
     p.add_argument("--eval_chunks", type=int, default=64)
     p.add_argument("--seed", type=int, default=0)
@@ -200,7 +202,8 @@ def main():
         p_.requires_grad_(True)
     groups = [{"params": lora, "lr": a.lr}]
     if a.variant == "router":
-        groups.append({"params": list(model.heads.parameters()), "lr": a.head_lr})
+        groups.append({"params": [model.heads.bias], "lr": a.head_lr})
+        groups.append({"params": [model.heads.weight], "lr": a.head_w_lr})
     opt = torch.optim.AdamW(groups, weight_decay=0.0)
     warm = 100
     sched = torch.optim.lr_scheduler.LambdaLR(
