@@ -1,19 +1,23 @@
 """Downstream benchmarks with per-token layer routing (Ouro and the other supported models).
 
 Multiple-choice tasks are scored like lm-eval-harness: the log-likelihood of each answer continuation
-given the prompt; `acc` picks the highest total, `acc_norm` the highest per byte. The prompt always runs
-the base path (all rounds); every ANSWER token is then decoded one at a time on its policy's path with a
-first-pass K/V cache (decode.step_path), so later answer tokens see the K/V the routed tokens wrote.
+given the prompt; `acc` picks the highest total, `acc_norm` the highest per byte.
 
-Policies (each reports accuracy and mean layer applications per answer token):
+Semantics: every ANSWER token follows its policy's layer path; at each step it attends to the other
+tokens' base-pass K/V of the layer being run plus its own current K/V (the diagonal swap, oracle.py).
+That is exact for each token's own prediction, is the setting the router was trained in, and matches
+OuroForCausalLM's exit_threshold evaluation (all rounds are computed for every token; each token's
+logits come from its exit round). Batched: one base pass per group of sequences, then run_paths.
+
+Policies (each reports accuracy with a 95% bootstrap CI and mean layer applications per answer token):
   base             the unmodified model (all rounds)
-  rounds:R         every answer token runs R rounds (Ouro; R = total+1 is one extra round)
-  gate:q           Ouro's own learned exit gate, decided in-pass: exit after the first round whose
-                   cumulative exit probability reaches q (OuroForCausalLM's exit_threshold)
+  rounds:R         every answer token runs R rounds (Ouro; R = total+1 adds one extra round)
+  gate:q           Ouro's own learned exit gate: exit after the first round whose cumulative exit
+                   probability reaches q (OuroForCausalLM's exit_threshold)
   static:NAME      every answer token runs one program from the router file, e.g. static:repeat@40x2
   router:lam       the trained ridge router (probe.py's router_lag_interp.npz) on token t-1's base-pass
                    features: argmin predicted dNLL + lam * cost, edits only where that is < 0
-  shuffled:lam     control: the router's choices for this item, randomly permuted across its answer
+  shuffled:lam     control: the router's choices for the whole task, randomly permuted across answer
                    tokens (same edits, same compute, no token-level signal)
 
   python bench.py --model ByteDance/Ouro-1.4B --router ouro_quick/router_lag_interp.npz \\
@@ -30,7 +34,6 @@ import torch
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from decode import Cache, _attend, _token_ctx, step_path
 from oracle import GO, make_g
 from ouro_model import load_causal_lm
 
@@ -100,78 +103,72 @@ def prog_name(R, c):
     return f"{o}@{l}" + (f"x{k}" if o in ("repeat", "block") else "")
 
 
-# ---------------------------------------------------------------- Ouro gate, decided in-pass
-@torch.no_grad()
-def step_gate(g, cache, token, pos, q):
-    """Base path, but stop after the first round whose cumulative exit probability >= q. Layers not run
-    write K/V projected from the final state (step_path's rule). Returns final state and layers run."""
-    L, n = len(g.layers), g.n_phys
-    x, cs = _token_ctx(g, token, pos)
-    pend, rem, cum, ran = [None] * L, torch.ones(x.shape[0], device=x.device), 0.0, L
-    for li in range(L):
-        qq, k, v = g.qkv(li, x, cs)
-        pend[li] = (k, v)
-        x, _ = _attend(g, li, x, qq, k, v, cache.k[li], cache.v[li], cs)
-        if li % n == n - 1 and li < L - 1:
-            lam = torch.sigmoid(g.m.early_exit_gate(g.norm(x)).float()[:, 0, 0])
-            cum = cum + lam * rem
-            rem = rem * (1 - lam)
-            if bool((cum >= q).all()):
-                ran = li + 1
-                break
-    for li in range(ran, L):
-        pend[li] = g.kv_of(li, x, cs)
-    for li in range(L):
-        cache.append(li, *pend[li])
-    return x, ran
-
-
 # ---------------------------------------------------------------- scoring
 @torch.no_grad()
-def score(g, tok, ctx, cont, policy, R, seqs, dev, rng):
-    """Log-likelihood of cont given ctx under a policy. Returns (sum logprob, n answer tokens, layers run)."""
-    c_ids = tok(ctx, add_special_tokens=False)["input_ids"]
-    a_ids = tok(cont, add_special_tokens=False)["input_ids"]
-    ids = torch.tensor([[tok.bos_token_id] + c_ids + a_ids], device=dev)
-    T, na = ids.shape[1], len(a_ids)
+def answer_logprobs(g, batch, policies, R, seqs, dev):
+    """batch: list of (ids list, n answer tokens). Returns {policy: list of (per-token logprobs, layers per
+    token)} for every sequence, plus the raw router choices (program index or -1) per answer token."""
     L = len(g.layers)
+    B, T = len(batch), max(len(x) for x, _ in batch)
+    ids = torch.zeros(B, T, dtype=torch.long, device=dev)
+    for b, (x, _) in enumerate(batch):
+        ids[b, : len(x)] = torch.tensor(x, device=dev)  # right padding: causal, so it never affects real tokens
     hs, kvs, attn_ent, cs = g.base_pass(ids)
-    if policy == "base":
-        lp = g.logits(hs[-1][0, T - na - 1: T - 1]).log_softmax(-1)
-        return float(lp.gather(-1, ids[0, T - na:, None]).sum()), na, float(L)
-    p0 = T - na - 1  # first position whose prediction is scored (the last prompt token)
-    cache = Cache(L)
-    for li in range(L):
-        cache.k[li], cache.v[li] = kvs[li][0][:, :, :p0], kvs[li][1][:, :, :p0]
-    kind, _, arg = policy.partition(":")
-    paths = None
-    if kind == "rounds":
-        paths = [list(range(g.n_phys * int(arg)))] * na if int(arg) <= g.rounds else \
-            [list(range(L)) + list(range(L - g.n_phys, L)) * (int(arg) - g.rounds)] * na
-    elif kind == "static":
-        c = [prog_name(R, i) for i in range(len(seqs))].index(arg)
-        paths = [seqs[c]] * na
-    elif kind in ("router", "shuffled"):
+    rows = [(b, t) for b, (x, na) in enumerate(batch) for t in range(len(x) - na - 1, len(x) - 1)]
+    bi = torch.tensor([r[0] for r in rows], device=dev)
+    ti = torch.tensor([r[1] for r in rows], device=dev)
+    tgt = ids[bi, ti + 1]
+
+    def lp_of(h_rows):  # h_rows: (n, d) final states of the scored rows
+        return g.logits(h_rows).log_softmax(-1).gather(-1, tgt[:, None])[:, 0].float().cpu().numpy()
+
+    def run_rows(paths):  # paths: list (one per scored row) of layer lists; others follow the base path
+        S = max(len(p_) for p_ in paths)
+        P = torch.arange(L, device=dev).repeat(B, T, 1)
+        if S > L:
+            P = torch.cat([P, torch.full((B, T, S - L), -1, device=dev)], -1)
+        for (b, t), p_ in zip(rows, paths):
+            P[b, t] = -1
+            P[b, t, : len(p_)] = torch.tensor(p_, device=dev)
+        return g.run_paths(hs, kvs, cs, P)[bi, ti]
+
+    choice = None
+    if any(p_.split(":")[0] in ("router", "shuffled") for p_ in policies):
         ent, agree, upd = g.lens_features(hs)
-        feat = torch.cat([ent, agree, upd, attn_ent.float()], -1)[0].float().cpu().numpy()  # T, 4L
-        X = (feat[p0 - 1: T - 2] - R["mean"]) / R["scale"]  # token t-1's features for t = p0 .. T-2
-        P = X @ R["coef"].T + R["intercept"]
-        obj = P + float(arg) * R["cfg_cost"][None]
-        ch = obj.argmin(1)
-        ch = np.where(obj[np.arange(len(ch)), ch] < 0, ch, -1)
-        if kind == "shuffled":
-            ch = rng.permutation(ch)
-        paths = [list(range(L)) if c < 0 else seqs[c] for c in ch]
-    lp_sum, layers = 0.0, 0
-    for t in range(p0, T - 1):
-        if kind == "gate":
-            h, ran = step_gate(g, cache, ids[:, t], t, float(arg))
+        feat = torch.cat([ent, agree, upd, attn_ent.float()], -1).float()
+        X = ((feat[bi, ti - 1].cpu().numpy() - R["mean"]) / R["scale"])  # token t-1's features
+        choice = X @ R["coef"].T + R["intercept"]  # predicted dNLL per program
+    out = {}
+    for pol in policies:
+        kind, _, arg = pol.partition(":")
+        if kind == "base":
+            lp, lay = lp_of(hs[-1][bi, ti]), np.full(len(rows), float(L))
+        elif kind == "rounds" and int(arg) <= g.rounds:
+            n = g.n_phys * int(arg)
+            lp, lay = lp_of(hs[n][bi, ti]), np.full(len(rows), float(n))
+        elif kind == "rounds":
+            p_ = list(range(L)) + list(range(L - g.n_phys, L)) * (int(arg) - g.rounds)
+            lp, lay = lp_of(run_rows([p_] * len(rows))), np.full(len(rows), float(len(p_)))
+        elif kind == "gate":
+            cum = g.exit_gate_probs(hs)[bi, ti].cumsum(-1)
+            hit = cum >= float(arg)
+            s_ = torch.where(hit.any(-1), hit.float().argmax(-1) + 1, torch.full_like(hit[:, 0], g.rounds, dtype=torch.long))
+            H = torch.stack([hs[g.n_phys * (r + 1)][bi, ti] for r in range(g.rounds)], 1)
+            lp = lp_of(H[torch.arange(len(rows), device=dev), s_ - 1])
+            lay = (s_ * g.n_phys).float().cpu().numpy()
+        elif kind == "static":
+            c = [prog_name(R, i) for i in range(len(seqs))].index(arg)
+            lp, lay = lp_of(run_rows([seqs[c]] * len(rows))), np.full(len(rows), float(len(seqs[c])))
+        elif kind in ("router", "shuffled"):
+            obj = choice + float(arg) * R["cfg_cost"][None]
+            ch = obj.argmin(1)
+            ch = np.where(obj[np.arange(len(ch)), ch] < 0, ch, -1)
+            out[f"_choice:{arg}"] = ch
+            continue  # filled in by the caller (shuffled needs choices pooled over the task)
         else:
-            path = paths[t - p0]
-            h, ran = step_path(g, cache, ids[:, t], t, path), len(path)
-        lp_sum += float(g.logits(h[:, 0]).log_softmax(-1)[0, ids[0, t + 1]])
-        layers += ran
-    return lp_sum, na, layers / na
+            raise ValueError(pol)
+        out[pol] = (lp, lay)
+    return out, rows, run_rows, lp_of
 
 
 def main():
@@ -181,6 +178,7 @@ def main():
     p.add_argument("--tasks", nargs="+", default=["arc_challenge", "arc_easy", "hellaswag", "mmlu", "winogrande"])
     p.add_argument("--n", type=int, default=500, help="items per task (fixed random subset)")
     p.add_argument("--policies", nargs="+", default=["base", "gate:0.5", "router:0", "shuffled:0"])
+    p.add_argument("--batch", type=int, default=32, help="sequences per batched pass")
     p.add_argument("--out", default="bench_out")
     a = p.parse_args()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -191,36 +189,85 @@ def main():
     R = dict(np.load(a.router)) if a.router else None
     seqs = program_seqs(R) if R is not None else None
     for pol in a.policies:
-        assert pol in ("base",) or pol.split(":")[0] in ("rounds", "gate", "static", "router", "shuffled"), pol
-        assert not pol.startswith(("rounds", "gate")) or isinstance(g, GO), f"{pol} needs a looped model"
-        assert not pol.startswith(("static", "router", "shuffled")) or R is not None, f"{pol} needs --router"
-    summary = {}
+        kind = pol.split(":")[0]
+        assert kind in ("base", "rounds", "gate", "static", "router", "shuffled"), pol
+        assert kind not in ("rounds", "gate") or isinstance(g, GO), f"{pol} needs a looped model"
+        assert kind not in ("static", "router", "shuffled") or R is not None, f"{pol} needs --router"
+    L = len(g.layers)
+    summary = json.load(open(os.path.join(a.out, "summary.json"))) if os.path.exists(os.path.join(a.out, "summary.json")) else {}
     for task in a.tasks:
+        t0 = time.time()
         items = load_task(task, a.n)
+        seq_list, owner = [], []  # every (item, choice) sequence
+        for ii, (ctx, conts, gold) in enumerate(items):
+            ctxs = ctx if isinstance(ctx, list) else [ctx] * len(conts)
+            for ci, (c_, k_) in enumerate(zip(ctxs, conts)):
+                ci_ids = tok(c_, add_special_tokens=False)["input_ids"]
+                a_ids = tok(k_, add_special_tokens=False)["input_ids"]
+                seq_list.append(([tok.bos_token_id] + ci_ids + a_ids, len(a_ids)))
+                owner.append((ii, ci))
+        order = np.argsort([len(x) for x, _ in seq_list])  # length-sorted batches: little padding
+        tok_lp = {pol: [None] * len(seq_list) for pol in a.policies}
+        tok_lay = {pol: [None] * len(seq_list) for pol in a.policies}
+        pending = {}
+        for s0 in range(0, len(order), a.batch):
+            idx = order[s0: s0 + a.batch]
+            batch = [seq_list[i] for i in idx]
+            out, rows, run_rows, lp_of = answer_logprobs(g, batch, a.policies, R, seqs, dev)
+            seg = np.cumsum([0] + [na for _, na in batch])
+            for pol in a.policies:
+                kind, _, arg = pol.partition(":")
+                if kind in ("router", "shuffled"):
+                    ch = out[f"_choice:{arg}"]
+                    if kind == "shuffled":
+                        pending.setdefault(arg, []).append((idx, seg, ch))
+                        continue
+                    paths = [list(range(L)) if c < 0 else seqs[c] for c in ch]
+                    lp, lay = lp_of(run_rows(paths)), np.array([len(q) for q in paths], float)
+                else:
+                    lp, lay = out[pol]
+                for k, i in enumerate(idx):
+                    tok_lp[pol][i], tok_lay[pol][i] = lp[seg[k]: seg[k + 1]], lay[seg[k]: seg[k + 1]]
+        # shuffled control: pool the router's choices over the task, permute, re-run with the same batches
+        for arg, parts in pending.items():
+            pol = f"shuffled:{arg}"
+            allc = np.random.default_rng(0).permutation(np.concatenate([ch for _, _, ch in parts]))
+            pos = 0
+            for idx, seg, ch in parts:
+                batch = [seq_list[i] for i in idx]
+                _, rows, run_rows, lp_of = answer_logprobs(g, batch, ["base"], R, seqs, dev)
+                chs = allc[pos: pos + len(ch)]
+                pos += len(ch)
+                paths = [list(range(L)) if c < 0 else seqs[c] for c in chs]
+                lp, lay = lp_of(run_rows(paths)), np.array([len(q) for q in paths], float)
+                for k, i in enumerate(idx):
+                    tok_lp[pol][i], tok_lay[pol][i] = lp[seg[k]: seg[k + 1]], lay[seg[k]: seg[k + 1]]
         for pol in a.policies:
-            rng = np.random.default_rng(0)
-            t0, rows = time.time(), []
-            for ctx, conts, gold in items:
-                ctxs = ctx if isinstance(ctx, list) else [ctx] * len(conts)
-                sc = [score(g, tok, c_, k_, pol, R, seqs, dev, rng) for c_, k_ in zip(ctxs, conts)]
-                ll = np.array([s[0] for s in sc])
+            ll = {}
+            for (ii, ci), lp in zip(owner, tok_lp[pol]):
+                ll.setdefault(ii, {})[ci] = float(lp.sum())
+            rows_out = []
+            for ii, (ctx, conts, gold) in enumerate(items):
+                v = np.array([ll[ii][ci] for ci in range(len(conts))])
                 nb = np.array([len(k_.encode()) for k_ in conts])
-                rows.append(dict(gold=gold, ll=ll.tolist(), acc=int(ll.argmax() == gold),
-                                 acc_norm=int((ll / nb).argmax() == gold), layers=float(np.mean([s[2] for s in sc]))))
-            acc = np.array([r["acc"] for r in rows])
-            accn = np.array([r["acc_norm"] for r in rows])
-            boot = np.random.default_rng(1).integers(0, len(rows), (1000, len(rows)))
-            res = dict(n=len(rows), acc=float(acc.mean()), acc_norm=float(accn.mean()),
+                rows_out.append(dict(gold=gold, ll=v.tolist(), acc=int(v.argmax() == gold),
+                                     acc_norm=int((v / nb).argmax() == gold)))
+            acc = np.array([r["acc"] for r in rows_out])
+            accn = np.array([r["acc_norm"] for r in rows_out])
+            boot = np.random.default_rng(1).integers(0, len(rows_out), (1000, len(rows_out)))
+            lay = float(np.concatenate(tok_lay[pol]).mean())
+            res = dict(n=len(rows_out), acc=float(acc.mean()), acc_norm=float(accn.mean()),
                        acc_ci=[float(np.percentile(acc[boot].mean(1), q)) for q in (2.5, 97.5)],
-                       layers_per_answer_token=float(np.mean([r["layers"] for r in rows])),
-                       minutes=(time.time() - t0) / 60)
+                       acc_norm_ci=[float(np.percentile(accn[boot].mean(1), q)) for q in (2.5, 97.5)],
+                       layers_per_answer_token=lay, minutes=(time.time() - t0) / 60)
             summary[f"{task}|{pol}"] = res
-            print(f"{task:14s} {pol:14s} acc {res['acc']:.3f} [{res['acc_ci'][0]:.3f},{res['acc_ci'][1]:.3f}] "
-                  f"acc_norm {res['acc_norm']:.3f}  layers/tok {res['layers_per_answer_token']:6.1f}  "
-                  f"({res['minutes']:.1f} min)", flush=True)
+            print(f"{task:14s} {pol:14s} acc {res['acc']:.3f} [{res['acc_ci'][0]:.3f},{res['acc_ci'][1]:.3f}]  "
+                  f"acc_norm {res['acc_norm']:.3f} [{res['acc_norm_ci'][0]:.3f},{res['acc_norm_ci'][1]:.3f}]  "
+                  f"layers/tok {lay:6.1f}", flush=True)
             with open(os.path.join(a.out, f"{task}_{pol.replace(':', '_')}.jsonl"), "w") as f:
-                f.writelines(json.dumps(r) + "\n" for r in rows)
-            json.dump(summary, open(os.path.join(a.out, "summary.json"), "w"), indent=1)
+                f.writelines(json.dumps(r) + "\n" for r in rows_out)
+        json.dump(summary, open(os.path.join(a.out, "summary.json"), "w"), indent=1)
+        print(f"  ({task}: {(time.time() - t0) / 60:.1f} min)", flush=True)
 
 
 if __name__ == "__main__":

@@ -121,23 +121,29 @@ def test_run_paths_matches_independent():
 
 
 @torch.no_grad()
-def test_bench_decode_matches_base():
-    """bench.py: prompt prefilled from the base pass, answer tokens decoded one by one on the base path
-    (and with the gate never firing) give the base pass's log-likelihood."""
-    from bench import step_gate
-    from decode import Cache, step_path
+def test_bench_batched_scoring():
+    """bench.py: right-padded batches give the unpadded log-likelihoods; gate never firing == base;
+    an extra round for answer tokens == the independent recompute of that path."""
+    from bench import answer_logprobs
 
-    ids = IDS[:1]
-    T, p0 = ids.shape[1], 7
-    hs, kvs, _, _ = G.base_pass(ids)
-    ref = G.logits(hs[-1][0, p0:T - 1]).log_softmax(-1).gather(-1, ids[0, p0 + 1:, None])[:, 0]
-    for mode in ("path", "gate"):
-        cache = Cache(L)
-        for li in range(L):
-            cache.k[li], cache.v[li] = kvs[li][0][:, :, :p0], kvs[li][1][:, :, :p0]
-        out = []
-        for t in range(p0, T - 1):
-            h = step_path(G, cache, ids[:, t], t, list(range(L))) if mode == "path" else \
-                step_gate(G, cache, ids[:, t], t, 2.0)[0]
-            out.append(G.logits(h[:, 0]).log_softmax(-1)[0, ids[0, t + 1]])
-        assert (torch.stack(out) - ref).abs().max() < NTOL, mode
+    a_ = IDS[0, :12].tolist()
+    b_ = IDS[1, :8].tolist()
+    batch = [(a_, 3), (b_, 2)]
+    out, rows, run_rows, lp_of = answer_logprobs(G, batch, ["base", "rounds:3", "gate:2.0", "rounds:4"],
+                                                 None, None, "cpu")
+    ref = []
+    for x, na in batch:
+        ids = torch.tensor([x])
+        hs, _, _, _ = G.base_pass(ids)
+        T = len(x)
+        ref.append(G.logits(hs[-1][0, T - na - 1: T - 1]).log_softmax(-1).gather(-1, ids[0, T - na:, None])[:, 0])
+    ref = torch.cat(ref).numpy()
+    for pol in ("base", "rounds:3", "gate:2.0"):
+        assert abs(out[pol][0] - ref).max() < NTOL, pol
+    extra = list(range(L)) + list(range(L - N, L))
+    for k, (b, t) in enumerate(rows):
+        x = torch.tensor([batch[b][0]])
+        hs, _, _, _ = G.base_pass(x)
+        ind = -G.independent_program_nll(hs, x, extra, t, 0)
+        assert abs(out["rounds:4"][0][k] - ind) < NTOL, (b, t)
+    assert (out["rounds:4"][1] == len(extra)).all() and (out["gate:2.0"][1] == L).all()
