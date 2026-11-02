@@ -176,3 +176,35 @@ def test_routed_ouro_paths():
         ref = MODEL.lm_head(m.norm(x))
         assert (lg - ref).abs().max() < 1e-4, (j, act)  # SDPA vs manual attention rounding
         assert (lay == L - 1 + act).all()
+
+
+@torch.no_grad()
+def test_structured_router_states_and_warm_start():
+    """structured_router: round states == reference rounds; the 'extra' state == re-running the second half
+    of the layers on the round output; heads warm-started from Ouro's gate give Ouro's exit pdf; decide()
+    with an unreachable threshold runs every round."""
+    from routed_ouro import RoutedOuro
+    from structured_router import Heads, decide, expected, option_costs, round_states
+
+    sd = RoutedOuro(MODEL, use_router=False).double()
+    H, X = round_states(MODEL, IDS, half=2, sdpa=sd)
+    outs, gates = MODEL.rounds(IDS)
+    m = MODEL.model
+    pos = torch.arange(IDS.shape[1])[None].expand(IDS.shape[0], -1)
+    cos, sin = m.rotary_emb(m.embed_tokens(IDS), pos)
+    for r in range(R):
+        assert (m.norm(H[r]) - outs[r]).abs().max() < 1e-4  # SDPA vs manual attention rounding
+        y = H[r]
+        for l in range(N - 2, N):
+            y = MODEL._layer(m.layers[l], y, cos, sin)
+        assert (X[r] - y).abs().max() < 1e-4
+    h = Heads(m.early_exit_gate, R, extra=False).double()
+    pdf, e = h([m.norm(x) for x in H])
+    lam = [torch.sigmoid(g_[..., 0]) for g_ in gates]
+    ref = torch.stack([lam[0], (1 - lam[0]) * lam[1], (1 - lam[0]) * (1 - lam[1])], -1)
+    assert (pdf - ref).abs().max() < 1e-4 and (e == 0).all()
+    r_, ex = decide(pdf, e, 2.0)
+    assert (r_ == R - 1).all() and not ex.any()
+    ce = torch.rand(*pdf.shape, 2, dtype=pdf.dtype)
+    obj, lay = expected(pdf, e, ce, 0.0, option_costs(N, R, 2, "cpu"))
+    assert (obj - (pdf * ce[..., 0]).sum(-1)).abs().max() < 1e-9
