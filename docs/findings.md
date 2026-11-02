@@ -12,6 +12,7 @@ We tested this on four models, from GPT-2 to a model trained to loop. Benchmarks
 - **No router could choose those paths in advance.** Linear and MLP routers, interpretability features, raw hidden states, confidence-based self-selection and training-free rules from prior work all failed to beat "no edit" when fitted to a frozen model. Most of the hindsight gain comes from picking the best of many small perturbations after seeing the answer.
 - **Per-token compute does pay off when the router is trained with the model.** Ouro-1.4B was pretrained to loop and has a learned exit gate. That gate beats a fixed compute budget on ARC-Easy by +3.6 points at the same compute (paired p < 0.0001) and matches full-compute accuracy elsewhere with 14–33% fewer layers.
 - **Our finer-grained router lost to that coarse gate.** We trained a per-layer router (skip, run once or run twice at each of Ouro's 96 unrolled layers) for about 10M tokens. It was worse than Ouro's built-in gate on 4 of 5 benchmarks while using more compute. A diagnostic shows why: it gives *less* compute to hard tokens, and per-layer decisions never discovered the cheapest saving, dropping the last round.
+- **Trained properly, a router matches Ouro's gate but can't add loops.** With few structured actions and the exact expected loss, a router recovers Ouro's gate to within 0.001 nats. Offered the option to re-run half a round, it never used it: on average that raises the loss by 0.7–1.0 nats.
 
 ## The idea
 
@@ -91,15 +92,33 @@ We ran the retrained router (held-out loss 2.417, matching the first run) agains
 The 4th round is worth only 0.025 nats per token on average, so dropping it whole is the cheapest compute to give up, and that is what Ouro's gate does. Our router skips 0% of round 4 and instead removes the middle of round 3, which costs more. It also never chose "run twice". Our reading, not yet tested directly: a head deciding one layer at a time sees that skipping any *single* late layer hurts, and can't see that skipping all 24 of them together is nearly free. Independent per-layer decisions trained with straight-through gradients have no way to discover coordinated, multi-layer actions like "stop here."
 - **Training and evaluation disagree.** With decisions sampled as in training, the router uses 74 layers at a loss of 2.605. With its most likely decisions (how it is benchmarked) it uses 78 layers at 2.433.
 
+## Finding 6: trained properly, a router recovers the gate, and extra loops still don't help
+
+The diagnostic pointed to the training method, so we rebuilt the router around it:
+
+- **Few structured actions:** at each round boundary a token stops, or stops after re-running the second half of that round once more (+12 layers).
+- **The exact expected loss:** with Ouro frozen, every option's per-token loss is a fixed number, so the objective is exact. No sampling and no straight-through gradients.
+- **A warm start:** the router starts as Ouro's own gate, at three compute prices, against a stop-only control trained the same way.
+
+On held-out FineWeb-Edu, all three land on Ouro's gate curve to within 0.001 nats (at 70 layers per token: 2.3372 vs the gate's 2.3362). The per-layer router was about 0.09 nats worse at the same compute, so the training method was the problem. But the router does not beat the gate. Retraining for 12M tokens recovers what Ouro learned over 7.7T, and the stop-only control comes out identical.
+
+The router drove the "re-run half a round" option from 0.25% down to 0.01% of tokens. A direct check shows why:
+
+- **On average, re-running half a round raises a token's loss** by 0.99, 0.93, 0.73 and 0.68 nats after rounds 1 to 4.
+- **It helps 16–20% of tokens,** by about 0.13 nats each. But those tokens can only be picked out in hindsight, the same lottery as Finding 1.
+
+Ouro only benefits from the loop it was trained on, whole rounds, and even a whole fifth round added nothing on the benchmarks.
+
 ## What we take from this
 
 1. **Per-token compute allocation is real, but it has to be learned jointly with the model.** Fitting a router to a frozen network finds nothing; a gate trained alongside the network finds benchmark-level gains.
 2. **The useful granularity so far is coarse.** "How many rounds" beat "which layer, how many times," even though the second strictly contains the first. More options made the hindsight gain bigger and the learned policy worse: the per-layer router never discovered the coordinated "stop after round 3" that the gate gets for free.
 3. **Hindsight oracles mislead here.** A per-token oracle over many edits measures how often *some* perturbation happens to favor the right token. Report it, but don't read it as reachable headroom.
+4. **A router can only spend computation the model already knows how to use.** It can choose how much of the model's trained recurrence each token gets, and Ouro's gate already does that near-optimally. New kinds of looping have to be trained into the model itself.
 
 ## Open questions
 
-- **Structured actions.** A router whose choices are whole spans ("stop after this round," "repeat this block") rather than single layers would see the cheap, coordinated savings that per-layer decisions miss.
+- **Recurrence the model is trained to use.** Since routers can't unlock loops a model never learned, the next step is to train recurrence in: for example, a recurrent state carried from one token's late layers into the next token's middle layers, retrofitted into a pretrained LLM.
 - **Does any of this hold at larger scale?** The next target is a loop-converted Qwen3-8B (LoopUS, arXiv 2605.11011), whose built-in halting is decided per sequence rather than per token.
 
 ## Limitations
@@ -120,5 +139,6 @@ python bench.py --model ByteDance/Ouro-1.4B --policies base rounds:3 gate:0.2 --
 python routed_ouro.py --variant router --no_lora --target_layers 72 --out r5/router72_frozen  # our router
 python bench_compare.py --dir bench ... --a gate:0.2 --b rounds:3 --metric acc_norm        # paired tests
 python diagnose_router.py --ckpt r5/router72_frozen/model.pt --out diag                     # why the router lost
+python structured_router.py train --out sr && python structured_router.py eval --heads sr/heads.pt --out sr  # Finding 6
 python scripts/make_findings_figs.py                                      # these figures
 ```
