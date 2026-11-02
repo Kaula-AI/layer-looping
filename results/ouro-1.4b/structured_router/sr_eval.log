@@ -1,0 +1,27 @@
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 871.36it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+fixed rounds: 24:3.9606 48:2.6301 72:2.3530 96:2.3290
+
+head set               55       60       65       70       75       80       85       90   (held-out NLL at layers/token)
+ouro_gate          2.3573   2.3476   2.3408   2.3362   2.3332   2.3311   2.3300   2.3293
+sr_lam0.0005            —        —   2.3429   2.3399   2.3349   2.3320   2.3302   2.3293
+gate_lam0.0005          —        —   2.3429   2.3399   2.3349   2.3320   2.3302   2.3294
+sr_lam0.001        2.3591   2.3485   2.3421   2.3389   2.3348   2.3321   2.3305   2.3294
+gate_lam0.001      2.3591   2.3485   2.3421   2.3389   2.3348   2.3321   2.3305   2.3294
+sr_lam0.002        2.3574   2.3478   2.3420   2.3372   2.3337   2.3320   2.3305        —
+gate_lam0.002      2.3574   2.3478   2.3421   2.3372   2.3338   2.3320   2.3305        —
+ouro_gate extra used: never
+sr_lam0.0005 extra used: never
+gate_lam0.0005 extra used: never
+sr_lam0.001 extra used: never
+gate_lam0.001 extra used: never
+sr_lam0.002 extra used: never
+gate_lam0.002 extra used: never
+SR_DONE
