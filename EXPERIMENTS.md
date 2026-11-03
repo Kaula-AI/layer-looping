@@ -37,6 +37,22 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 - *Conclusion so far:* per-token compute routing pays off on benchmarks when the router is trained with the model, not when it is fitted to a frozen one. Stage 2 (`routed_ouro.py`) trains a per-layer skip/once/twice router jointly with LoRA, against a LoRA-only control.
 - *Stage 2 (artifacts in `results/ouro-1.4b/stage2/`):* router + LoRA r16, 1200 × 8 × 1024 FineWeb-Edu tokens, target 72 layers/token. Two Lagrangian runs collapsed to ~10–18 layers (all heads flip together); a two-sided quadratic penalty with an annealed target was stable. Final: 73.2 layers/token, 26.6% skips, 0.5% twice; held-out NLL 2.314 vs the LoRA control's 2.278 at 96. Benchmarks (acc_norm, paired): vs control at 3 rounds (72 layers), MMLU +9.2 [+6.2, +12.2] p < 1e-4, Winogrande +2.2 (p = 0.07), HellaSwag −1.2 (n.s.; acc −2.2, p = 0.001); vs control at 96 layers, MMLU −1.1 and Winogrande +0.1 (n.s.), ARC −2.3/−2.7 (p < 0.02). **But** the LoRA fine-tune itself cost MMLU (0.669 → 0.632 at 96 layers; 3-round exit 0.643 → 0.529), and the original Ouro with its own gate beats the router model on 4 of 5 tasks (MMLU 0.667 at 80 layers vs 0.621 at 76). Router-only on frozen Ouro (`--no_lora`, same recipe): 73.9 layers/token in training but 79–84 at eval (argmax vs Gumbel samples); held-out NLL 2.417. Paired vs original Ouro's gate:0.2 it is worse on 4 of 5 tasks while using more layers (acc_norm ARC-C −3.2, ARC-E −1.8, HellaSwag −3.1, MMLU −4.4, all p < 0.05; Winogrande +0.8 n.s.). Ouro's own exit gate remains the best per-token compute policy found on Ouro.
 
+## E13 Noise null: selection or signal? (pre-registered 2026-11-02)
+**Question.** How much of the hindsight oracle gain does best-of-N over random perturbations of the same size recover?
+**Method.** `noise_null.py`: for every token and every (layer l, draw j, scale s), add a random-direction vector of norm
+s·‖h_{l+1} − h_l‖ (s = 1: the size of what skipping l removes) to the token's input to layer l, run the base order with
+the diagonal swap (exact for its own loss), and record dNLL. `selection_curve.py` compares best-of-N over real edits and
+over noise on the same held-out positions, at matched N, and plots gain against N.
+**Run.** `bash run_experiments.sh noise` (Gemma-4 E2B), then `MODEL=ByteDance/Ouro-1.4B bash run_experiments.sh noise`.
+**Metrics.** `selection.json → by_scale.*`: real and noise gain, `noise_share_of_real`, `corrected_gain` (real − noise)
+with chunk-bootstrap CI, gains by base-NLL quintile; the same with `--max_cost 0`.
+**Read-out, fixed before running.**
+- Selection: at the best-matching scale, noise recovers ≥ 75% of the real gain at matched N, and both curves rise with N
+  in parallel. The paper's claim stands as stated.
+- Partial: 25–75%. Report the corrected gain as the routable upper bound.
+- Signal: < 25%, with the corrected CI excluding 0 at every scale. Layer edits carry structure noise lacks; revisit the
+  routers (the oracle is reachable in principle) and soften the paper's "selection" claim.
+
 ## E1 Headroom by op (the go/no-go, ~$1 quick, ~$2 full)
 **Question.** How much does the best single edit help each token? Which ops and layers win, and how often is a skip free?
 **Hypotheses.**

@@ -238,15 +238,20 @@ class G2:
         return hs, kvs, torch.stack(ents, -1), cs  # hs[l] = input to layer l
 
     @torch.no_grad()
-    def run_program(self, hs, kvs, cs, seq):
+    def run_program(self, hs, kvs, cs, seq, x0=None, start=None):
         """Every position follows layer program `seq` (a list of layer indices, e.g. base
         0..L-1 with a layer repeated, dropped or two layers swapped). At each step a position
         attends to the other positions' BASE-pass K/V of the layer being run, plus its own
-        current K/V (diagonal swap). Exact for each position's own next-token loss."""
+        current K/V (diagonal swap). Exact for each position's own next-token loss.
+        x0, start: begin at step `start` from states x0 instead of hs[start] (noise_null.py
+        perturbs the input to layer `start` and runs the base order from there)."""
         d = 0  # first step where the program leaves the base order
         while d < len(seq) and d < len(self.layers) and seq[d] == d:
             d += 1
-        x = hs[d]
+        if start is not None:
+            assert start <= d, "x0 must be injected before the program leaves the base order"
+            d = start
+        x = hs[d] if x0 is None else x0
         latest = {s: kvs[s] for s in self.kv_sources if s < d}  # own K/V of shared-source layers
         for li in seq[d:]:
             for s in self.kv_sources:

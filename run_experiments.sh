@@ -6,6 +6,7 @@
 #   bash run_experiments.sh downstream   # E8 GSM8K at matched compute (needs `full` first; ~3-4 h)
 #   bash run_experiments.sh programs-quick  # E9-E12 per-token path search + controller on 20k tokens (~1 h)
 #   bash run_experiments.sh programs        # E9-E12 on 100k tokens (~4-6 h)
+#   bash run_experiments.sh noise           # noise null: best-of-N random perturbations vs the oracle (20k, ~40 min)
 # Model: google/gemma-4-E2B by default. Second model (E7, and the only one with Gemma Scope SAEs for `sae`):
 #   MODEL=google/gemma-2-2b bash run_experiments.sh full     # outputs get a _gemma-2-2b suffix
 set -euo pipefail
@@ -71,6 +72,18 @@ case "$MODE" in
       python program_eval.py "${M[@]}" --library "$OUT/library.npz" --controller "$OUT/controller.pt" --n_tokens "$N" \
         --lam $LAM --n_chunks 8 --out "$OUT" | tee "$OUT/program_eval_lam$LAM.txt"
     done
+    ;;
+  noise)
+    # Is the hindsight gain selection or signal? Same 20k positions as `quick`; reuses its oracle if present.
+    OUT=oracle_out_quick$SFX
+    mkdir -p "$OUT"
+    python -m pytest -q tests
+    [ -f "$OUT/oracle.npz" ] || python oracle.py "${M[@]}" --n_tokens 20000 --out "$OUT" | tee "$OUT/oracle_log.txt"
+    python noise_null.py "${M[@]}" --n_tokens 20000 --draws 4 --scales 0.5 1 2 --out "$OUT" | tee "$OUT/noise_log.txt"
+    python selection_curve.py --oracle "$OUT/oracle.npz" --noise "$OUT/noise.npz" --out "$OUT/selection" \
+      | tee "$OUT/selection_log.txt"
+    python selection_curve.py --oracle "$OUT/oracle.npz" --noise "$OUT/noise.npz" --out "$OUT/selection_cost0" \
+      --max_cost 0 | tee "$OUT/selection_cost0_log.txt"
     ;;
   *) echo "unknown mode $MODE"; exit 1;;
 esac
