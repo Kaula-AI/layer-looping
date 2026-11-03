@@ -16,37 +16,37 @@
 \usepackage{enumitem}
 \setlist{nosep,leftmargin=*}
 
-\newcommand{\pending}{\textcolor{BrickRed}{[pending]}}
 \newcommand{\dnll}{\Delta\mathrm{NLL}}
 \newcommand{\op}[1]{\textsf{#1}}
 
-% Numbers come from probe.py -> oracle_out_full/results.json -> scripts/make_tables.py.
-% Until that has run, every result renders as [pending].
-\IfFileExists{generated/results.tex}{\input{generated/results.tex}}{\input{placeholders.tex}}
+% Every number below comes from a saved artifact under results/ or pilot/; the source is named in a
+% comment next to each table and paragraph. See docs/findings.md and EXPERIMENTS.md for the run log.
 
 \title{\textbf{Layer Looping}\\[4pt]
-\large Per-token layer programs in a frozen LLM:\\ how much is there to gain, and can the previous token see it coming?}
-\author{Tyler Gee\\ \small K\=aula}
-\date{\small Preprint draft \textperiodcentered{} \today}
+\large Per-token layer routing looks powerful in hindsight,\\ but only a gate trained with the model can use it}
+\author{Tyler Gee\\ \small K\=aula \textperiodcentered{} \href{https://kaula.ai}{kaula.ai}}
+\date{\small November 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
 \noindent
-A pretrained transformer sends every token through every layer exactly once. We ask how much
-next-token loss is left on the table by that choice, and whether the right per-token change can
-be chosen \emph{before} the token is processed. For every token of a frozen Gemma~4 E2B we compute
-the exact change in its next-token negative log-likelihood under 140 layer programs: repeat one
-layer $k$ times, skip one layer, swap two adjacent layers, or loop a four-layer mid block. Only
-that token's computation changes. From this per-token oracle we measure (i)~headroom by edit
-type and layer; (ii)~a signed-cost compute--accuracy frontier on which skips can pay for loops;
-(iii)~how much of that headroom a linear router recovers from the \emph{previous} token's
-internals, against a same-token router and training-free entropy- and norm-gated baselines from
-prior work; and (iv)~whether interpretable signals (logit-lens entropy and agreement, residual
-update norms, attention entropy, and Gemma Scope SAE latents on Gemma-2-2B) carry that information
-as well as raw hidden states. We also measure how much of the per-token gain survives when routes are applied to
-whole sequences, where edited tokens change what later tokens attend to.
+Can each token of a pretrained language model choose its own path through the layers, looping some
+and skipping others, to spend compute where it is needed? We measure this exactly. For every token of a
+frozen Gemma~4 E2B and of Ouro-1.4B, a looped model, we compute the change in that token's next-token
+loss under every single-layer edit (repeat, skip, swap, block loop, early exit). In hindsight the best edit
+per token cuts loss by 0.60--0.80 nats on held-out text at no extra compute, and multi-edit paths raise this
+to 1.30. None of it is reachable. Ridge and MLP routers, reading the current or the previous token's
+internals, interpretable or raw features, and training-free entropy and norm rules from prior work all
+fail to beat ``no edit''; the hindsight gain grows with the number of options and sits on tokens the model
+already gets wrong, the signature of selection rather than signal. Light fine-tuning does not teach a
+standard model to use a loop. Per-token compute does pay off when the router is trained with the model:
+Ouro's built-in exit gate beats a fixed compute budget on ARC-Easy by $+3.6$ points at equal compute
+(paired $p<10^{-4}$). A finer per-layer skip/once/twice router trained on frozen Ouro loses to that gate on
+4 of 5 benchmarks, and a structured router trained on the exact expected loss recovers the gate to within
+0.001 nats but never uses an offered extra half-round. A router can only spend computation the model
+already knows how to use.
 \end{abstract}
 
 \section{Introduction}
@@ -54,190 +54,232 @@ whole sequences, where edited tokens change what later tokens attend to.
 Adaptive-depth methods---adaptive computation time~\citep{graves2016act}, universal
 transformers~\citep{dehghani2019universal}, early exiting~\citep{schuster2022calm},
 mixture-of-depths~\citep{raposo2024mod}, layer dropping~\citep{fan2020layerdrop,men2024shortgpt}---assume
-tokens differ in how much computation they need. Frozen models tolerate having layers skipped,
-repeated, or reordered~\citep{sun2024painters,lad2024robustness}, and recent training-free methods
-re-apply layers per token at high-entropy positions~\citep{bhattacharjee2026eglr} or where the
-hidden-state norm peaks~\citep{zhang2026telltale}. Static mid-block loops in frozen models give
-gains within noise~\citep{lys2026innerloop,chen2026trainingfreeloop}, and learned routers have
-repeatedly recovered little of oracle headroom~\citep{glavas2024dynamic,alizadeh2024duo}.
+tokens differ in how much computation they need. Frozen models tolerate layers being skipped, repeated or
+reordered~\citep{sun2024painters,lad2024robustness}, and recent training-free methods re-apply layers per
+token at high-entropy positions~\citep{bhattacharjee2026eglr} or where the hidden-state norm
+peaks~\citep{zhang2026telltale}. This suggests a tempting program: treat a pretrained model's layers as a
+library and let a cheap router pick each token's path.
 
-What is missing is a clean measurement: for each token in a frozen model, \emph{exactly} how much
-would a small edit to its own layer schedule help, and is that predictable from information
-available before the token's forward pass? Our contributions:
+We test that program directly, with an exact per-token oracle, and find a sharp split. Fitted to a frozen
+model, routing recovers nothing, although the oracle promises a great deal. Trained with the model, a
+coarse per-token exit gate gives benchmark gains at matched compute. Our contributions:
 \begin{enumerate}
-  \item \textbf{An exact per-token oracle} over repeat, skip, swap and block-loop programs in
-        Gemma~4 E2B, computed for all positions in about one forward pass per program (\cref{sec:oracle}),
-        with Gemma-2-2B as a second model.
-  \item \textbf{A signed-cost frontier} in which skips ($-1$) pay for repeats, against static
-        programs and training-free baselines from prior work.
-  \item \textbf{Routing from token $t-1$}, decided before token $t$'s pass, compared with a
-        same-token router.
-  \item \textbf{A controlled comparison} of interpretable signals, raw hidden states and SAE latents
-        as router inputs.
-  \item \textbf{The interaction gap}: how much of the summed per-token gain survives when whole
-        routes are applied to sequences.
+  \item \textbf{An exact per-token oracle} over repeat, skip, swap, block-loop and exit edits in a frozen
+        model, computed for all positions in about one forward pass per edit (\cref{sec:method}).
+  \item \textbf{A negative result for frozen-model routing} across feature sets, router classes, lag, and
+        training-free baselines, with three checks that the hindsight gain is selection, not signal (\cref{sec:frozen}).
+  \item \textbf{A positive result for trained-in routing}: paired benchmark comparisons of Ouro-1.4B's exit
+        gate against fixed compute (\cref{sec:ouro}).
+  \item \textbf{A diagnosis of why a finer router loses} to that gate, and a structured router that
+        recovers it but declines extra recurrence (\cref{sec:finer}).
 \end{enumerate}
 
 \section{Method}
-\label{sec:oracle}
+\label{sec:method}
 
-\paragraph{Layer programs.}
-Gemma~4 E2B has $L=35$ layers, applied in order $0,\dots,L-1$. A program $c$ is one edit to this
-schedule for a single token: \op{repeat}@$\ell$\,$\times k$ ($k\in\{2,3\}$, cost $k-1$),
-\op{skip}@$\ell$ (cost $-1$), \op{swap}@$\ell$ (run $\ell+1$ before $\ell$, cost $0$), plus a
-static block loop run twice (cost $4$): layers 13--16, the best Gemma-2-2B block reported by
-\citet{lys2026innerloop} (layers 10--13 of 26) moved to the same relative depth. That is 140
-programs (104 on Gemma-2-2B). Cost counts extra layer applications.
-
-\paragraph{Shared keys and values.}
-Layers 15--34 of E2B compute no keys or values of their own; each attends to those of layer 13 or
-14 (the last earlier layer of the same attention type). For the edited token we use its
-\emph{latest} key and value from that source layer, so an edit at layer 13 or 14 also changes
-what up to 20 later layers attend to; other tokens keep their base-pass ones. If the token's
-program has not run the source layer yet, its key and value are projected from its state where
-the program first passes that layer. Each layer also adds the token's own per-layer embedding
-wherever it runs; a skipped layer adds none.
+\paragraph{Edits and cost.}
+A model with $L$ layers runs them in order $0,\dots,L-1$. An edit changes that schedule for one token:
+\op{repeat}@$\ell$\,$\times k$ ($k\in\{2,3\}$, cost $k-1$), \op{skip}@$\ell$ (cost $-1$), \op{swap}@$\ell$ (run
+$\ell+1$ before $\ell$, cost 0), or a static block loop. Cost counts extra layer applications. Gemma~4 E2B
+($L=35$) has 140 such programs, including a mid-block loop (layers 13--16 twice) scaled from the best
+Gemma-2-2B block of \citet{lys2026innerloop}. Ouro-1.4B~\citep{zhu2025ouro} runs 24 layers for 4 rounds
+(96 unrolled layers) and was pretrained with a per-token exit gate; on it we add early exits and a fifth
+round, 387 programs in all.
 
 \paragraph{The diagonal swap.}
-We want token $t$'s next-token loss when only $t$ runs program $c$ and every other token runs
-normally. Because the model is causal, we can compute this for all positions at once. At each
-step of the program, a query attends to the \emph{base-pass} keys and values of every other
-position at the layer being run, and to its \emph{own} modified key and value on the diagonal.
-This is exact for each token's own loss, at the cost of about one forward pass per program. It
-ignores the effect of $t$'s modified key and value on later tokens; \cref{sec:interaction}
-measures that separately. CPU tests on tiny random Gemma-2 and Gemma~4 models (the latter with
-shared keys and values and per-layer embeddings) check that every oracle delta equals an
-independent recompute that truncates the sequence at $t$ and runs the program normally.
+We want token $t$'s next-token loss when only $t$ runs program $c$ and every other token runs normally.
+Because the model is causal, this can be computed for all positions at once: at each step a query
+attends to the \emph{base-pass} keys and values of every other position and to its \emph{own} modified key
+and value on the diagonal. This is exact for each token's own loss. On E2B, layers 15--34 reuse the keys
+and values of layer 13 or 14; the edited token uses its latest own copy, so edits there reach later layers.
+CPU tests on tiny random Gemma-2 and Gemma~4 models check every oracle delta against an independent
+recompute that truncates the sequence at $t$, for every edit type and for arbitrary multi-edit paths.
 
 \paragraph{Oracle and routers.}
-$\dnll_t(c) = \mathrm{NLL}_t(c) - \mathrm{NLL}_t(\text{base})$; negative means the edit helps. The
-oracle picks $\arg\min_c \dnll_t(c)$, falling back to the base program when nothing helps. A token
-is \emph{helped} if the oracle gain exceeds $0.05$ nats, and a skip is \emph{safe} if its
-$\dnll < 0.01$. A router predicts the vector $\widehat{\dnll}_t$ by ridge regression and routes to
-$\arg\min_c [\widehat{\dnll}_t(c) + \lambda\,\mathrm{cost}(c)]$ (base if the minimum is
-non-negative); sweeping $\lambda$ traces its frontier, and we always report \emph{realized} $\dnll$.
-The \textbf{same-token} router reads token $t$'s base-pass features; the \textbf{lagged} router
-reads token $t-1$'s, which exist before $t$ is processed.
-
-\paragraph{Features and baselines.}
-Interpretable features are four per-layer groups: logit-lens~\citep{nostalgebraist2020logitlens}
-entropy, logit-lens agreement with the final prediction, relative residual-update norm, and
-attention entropy. We compare them with raw hidden states and, on Gemma-2-2B, with Gemma Scope
-SAE~\citep{lieberum2024gemmascope} latents at layers 6, 12 and 18 (no Gemma Scope SAEs exist for
-Gemma~4). Training-free baselines: an
-EGLR-like rule~\citep{bhattacharjee2026eglr} that repeats a top layer when next-token entropy is
-high (decided at $t$, or one token early), and a norm-peak rule~\citep{zhang2026telltale} that
-repeats the layer with the largest update norm.
+$\dnll_t(c) = \mathrm{NLL}_t(c) - \mathrm{NLL}_t(\text{base})$; negative means the edit helps. The oracle takes
+$\min_c \dnll_t(c)$, or 0 if nothing helps. A router predicts $\widehat{\dnll}_t$ and routes to
+$\arg\min_c [\widehat{\dnll}_t(c) + \lambda\,\mathrm{cost}(c)]$, or to the base program if the minimum is
+non-negative; we report the \emph{realized} $\dnll$. The \textbf{same-token} router reads token $t$'s
+base-pass features; the \textbf{lagged} router reads token $t-1$'s, which exist before $t$ is processed.
+Interpretable features are per-layer logit-lens~\citep{nostalgebraist2020logitlens} entropy and agreement
+with the final prediction, residual-update norms and attention entropy; raw features are hidden states.
+Training-free baselines are an EGLR-like entropy gate~\citep{bhattacharjee2026eglr} (same token or one
+token early) and a norm-peak repeat~\citep{zhang2026telltale}.
 
 \paragraph{Data and evaluation.}
-WikiText-103 prose and GSM8K question--answer text in alternating 512-token chunks, each starting
-with BOS. Chunks with index $\equiv 0 \pmod 5$ are held out; 95\% confidence intervals come from
-bootstrap resampling over held-out chunks.
+Oracles use 20,440 positions of WikiText-103~\citep{merity2017pointer} prose and GSM8K~\citep{cobbe2021gsm8k}
+text in alternating 512-token chunks; chunks with index $\equiv 0 \pmod 5$ are held out, and 95\% confidence
+intervals bootstrap over held-out chunks. Ouro router training and loss curves use FineWeb-Edu~\citep{penedo2024fineweb}.
+Benchmarks are ARC-Easy and ARC-Challenge~\citep{clark2018arc}, HellaSwag~\citep{zellers2019hellaswag},
+MMLU~\citep{hendrycks2021mmlu} and WinoGrande~\citep{sakaguchi2020winogrande}: 1,000 items each, scored by
+length-normalized log-likelihood. Each answer token follows its own path against the other tokens'
+base-pass keys and values, the same accounting as Ouro's early-exit evaluation. Comparisons are paired on
+identical items, with a bootstrap CI over items and McNemar's exact test. Compute is layers per answer token.
 
-\section{Results}
+\section{Frozen-model routing finds nothing}
+\label{sec:frozen}
 
-\subsection{Headroom (E1)}
-Over \resPositions{} positions with base NLL \resBaseNLL{} nats/token, the per-token oracle reduces
-NLL by \resOracleGain{} nats (\resOraclePct\% of base) and helps \resFracHelped{} of tokens. The
-best static program, applied to every token, is \resBestStatic{} with mean $\dnll$
-\resBestStaticDnll. A safe skip exists for \resSafeSkip{} of tokens.
-
-\begin{table}[h]
+\begin{figure}[t]
 \centering
-\caption{Oracle headroom by edit type. \emph{Restricted gain}: oracle gain using only this edit
-type. \emph{Best-op share}: fraction of all tokens that are helped and whose best edit is this type.}
-\label{tab:headroom}
-\begin{tabular}{lccl}
-\toprule
-Edit & Restricted gain (nats) & Best-op share & Best static \\
-\midrule
-\HeadroomRows
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Compute--accuracy frontier (E2)}
-
-\begin{figure}[h]
-\centering
-\IfFileExists{figures/frontier.png}{%
-  \includegraphics[width=0.85\linewidth]{figures/frontier.png}%
-}{%
-  \fbox{\parbox[c][2.2in][c]{0.8\linewidth}{\centering\pending\\[2pt]\small\texttt{bash run\_experiments.sh full}, then \texttt{scripts/make\_tables.py}}}%
-}
-\caption{NLL saved versus extra layer applications per token. Curves are Pareto fronts over
-$\lambda$; markers are static programs.}
-\label{fig:frontier}
+\includegraphics[width=0.82\linewidth]{figures/fig1_hindsight_vs_router.png}
+\caption{Loss reduction per token at zero extra compute: the best single edit chosen in hindsight (blue)
+versus the best trained router (orange, zero on every model). Gemma~4 E2B and Ouro-1.4B use the exact
+per-token oracle over all 20,440 positions; the GPT-2 small and Qwen3-1.7B pilots~\citep{radford2019gpt2,yang2025qwen3}
+apply each edit to the whole sequence.}
+\label{fig:hindsight}
 \end{figure}
 
-\begin{table}[h]
+% Source: results/gemma-4-e2b-quick/probe_log.txt, results/ouro-1.4b/ouro_quick/probe_log.txt (held-out, lambda = 0).
+\begin{table}[t]
 \centering
-\caption{Budget-matched $\dnll$ (nats/token; lower is better): the best frontier point using at most
-the given extra layer applications per token. ``---'': unreachable.}
-\label{tab:budget}
-\small
-\BudgetTable
-\end{table}
-
-\subsection{Does the previous token know? (E3)}
-The lagged interpretable router retains \resLagRecovery{} of the same-token router's gain.
-
-\begin{table}[h]
-\centering
-\caption{Routers at $\lambda=0$ on held-out chunks. AUC: detecting helped tokens from the predicted
-best gain. \emph{Edit\%}: share of tokens routed away from the base program.}
-\label{tab:routers}
+\caption{Held-out $\dnll$ (nats/token, lower is better) at $\lambda=0$. AUC: detecting tokens an edit helps
+from the router's predicted best gain (0.5 is chance). Training-free rules never beat 0.}
+\label{tab:frozen}
 \small
 \begin{tabular}{lcccc}
 \toprule
-Features & $\dnll$ & 95\% CI & AUC & Edit\% / +layers \\
+ & \multicolumn{2}{c}{Gemma~4 E2B (base 1.91)} & \multicolumn{2}{c}{Ouro-1.4B (base 1.79)} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Policy & $\dnll$ [95\% CI] & AUC & $\dnll$ [95\% CI] & AUC \\
 \midrule
-\RouterRows
+Hindsight oracle & $-0.797$ & --- & $-0.604$ & --- \\
+Best static program & $+0.014$ & --- & $+0.002$ & --- \\
+Same-token, interpretable & $+0.077$ [$+0.052$, $+0.101$] & 0.20 & $+0.073$ [$+0.053$, $+0.096$] & 0.40 \\
+Lagged, interpretable & $+0.068$ [$+0.056$, $+0.082$] & 0.35 & $+0.057$ [$+0.046$, $+0.070$] & 0.45 \\
+Same-token, raw & $+0.330$ [$+0.282$, $+0.386$] & 0.45 & $+0.139$ [$+0.090$, $+0.193$] & 0.47 \\
+Lagged, raw & $+0.428$ [$+0.368$, $+0.493$] & 0.52 & $+0.228$ [$+0.170$, $+0.273$] & 0.52 \\
+Entropy / norm-peak rules & $\phantom{+}0.000$ & --- & $-0.0001$ & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{What carries the signal? (E4)}
-\SAENote
+\Cref{fig:hindsight} and \cref{tab:frozen} show the gap. On both models the hindsight oracle removes 34--42\%
+of base loss, and every learned router is \emph{worse} than doing nothing, with confidence intervals
+excluding zero. AUCs at or below chance mean the routers cannot even rank which tokens an edit would help.
+Swept over $\lambda$, every router's best point at zero extra compute is ``no edit''. Routing from the previous
+token does no better or worse than from the current one, because there is nothing to recover. Label-free
+self-selection (run several edits, keep the most confident output) gives at best $+0.0008$ [$-0.0007$,
+$+0.0025$] on E2B.
 
-\begin{table}[h]
+\paragraph{The hindsight gain is selection, not signal.}
+Three checks on E2B. \emph{It is not numerical noise}: recomputing the oracle in float32 gives the same
+$-0.81$ nats as bf16 (per-edit correlation 0.9999), and routers retrained on float32 labels are unchanged.
+\emph{It grows with the number of options}: over multi-edit paths, the oracle at zero extra compute rises
+from $-0.87$ (single edits) to $-0.97$ (a 396-path shared library) to $-1.30$ (per-token beam search), while an
+MLP controller's best point stays at no edit. \emph{It sits on tokens the model already gets wrong}: none of
+the most confident fifth of tokens are helped, against all of the least confident three fifths. A per-token
+oracle over many edits measures how often \emph{some} perturbation happens to favor the right token.
+
+\paragraph{Light fine-tuning does not teach a loop.}
+On E2B we trained LoRA~\citep{hu2022lora} adapters (rank 16, about 6M tokens) with layers 5--8 looped
+twice and the loop's output mixed in by a learnable weight $\alpha$ initialized at 0, or by a learned
+per-token gate. Training kept $|\alpha| < 5\times10^{-4}$ even at a 50$\times$ learning rate; the gate closed
+to 0.2\%. Every looped variant landed within seed noise of a LoRA control without a loop
+(WikiText NLL 2.135--2.137 vs 2.136).
+
+\section{A router trained with the model works}
+\label{sec:ouro}
+
+% Source: bench_compare.py over results/ouro-1.4b/bench_fast and results/ouro-1.4b/stage2/bench_orig (acc_norm).
+\begin{table}[t]
 \centering
-\caption{Lagged routers using one interpretable feature group ($\lambda=0$).}
-\label{tab:ablation}
-\begin{tabular}{lcc}
+\caption{Ouro-1.4B accuracy (acc\_norm, 1,000 items). Gate: Ouro's own exit gate at threshold 0.2.
+$\Delta$: gate minus fixed 3 rounds, paired 95\% CI and McNemar $p$. Layers per answer token in parentheses.}
+\label{tab:ouro}
+\small
+\begin{tabular}{lccccc}
 \toprule
-Feature group & $\dnll$ & +layers \\
+Task & 4 rounds (96) & 3 rounds (72) & Gate & $\Delta$ [95\% CI] & $p$ \\
 \midrule
-\AblationRows
+ARC-Easy      & 0.784 & 0.746 & 0.782 (72.6) & $+3.6$ [$+2.2$, $+5.0$] & $<10^{-4}$ \\
+ARC-Challenge & 0.516 & 0.502 & 0.512 (71.9) & $+1.0$ [$-0.2$, $+2.2$] & 0.14 \\
+HellaSwag     & 0.714 & 0.709 & 0.711 (65.8) & $+0.2$ [$-0.8$, $+1.2$] & 0.84 \\
+MMLU          & 0.669 & 0.643 & 0.667 (79.8) & $+2.4$ [$+0.9$, $+3.9$] & 0.003 \\
+WinoGrande    & 0.672 & 0.676 & 0.671 (72.0) & $-0.5$ [$-2.0$, $+1.0$] & 0.60 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Interaction gap (E5)}
-\label{sec:interaction}
-\pending{} Whole-sequence routed loss versus the sum of independent per-token oracle deltas, from
-\texttt{routed\_eval.py} with first-pass KV caching.
+Ouro was pretrained on 7.7T tokens with a per-token exit gate. \Cref{tab:ouro} compares that gate with
+running a fixed 3 rounds for every token. On ARC-Easy the gate gains 3.6 points at the same compute
+(72.6 vs 72 layers). On HellaSwag it matches fixed rounds with 6 fewer layers. On MMLU it gains 2.4 points
+but uses 8 more layers, so that comparison is not compute-matched. On all five tasks it stays within
+0.1--0.4 points of full 96-layer accuracy, and a fifth round for every token adds nothing (within 0.8 points
+of 4 rounds everywhere). On held-out text, the gate at threshold 0.5 exits 54\% of tokens early and saves
+13.3 layers per token at $\dnll=-0.002$; frozen-model routers on the same model are worse than no edit
+(\cref{tab:frozen}).
+
+\section{Finer control loses to coarse control}
+\label{sec:finer}
+
+\paragraph{A per-layer router.}
+We trained a head at each of Ouro's 96 unrolled layers to choose skip, once or twice per token, with
+Ouro frozen, straight-through Gumbel-softmax~\citep{jang2017gumbel} and a budget of 72 layers per token,
+on about 10M FineWeb-Edu tokens. A Lagrangian budget collapsed to 10--18 layers within 25 steps (one shared
+signal flips all heads to skip together); a two-sided quadratic penalty with an annealed target was stable.
+Against Ouro's gate on the benchmarks of \cref{tab:ouro}, the router is worse on 4 of 5 tasks while using
+more layers (79--84): ARC-Challenge $-3.2$, ARC-Easy $-1.8$, HellaSwag $-3.1$, MMLU $-4.4$ points (all
+$p<0.05$); WinoGrande $+0.8$ (n.s.). Trained jointly with LoRA it matched a LoRA-only control's full-compute
+MMLU and WinoGrande at 23\% less compute, but the fine-tune itself cost the base model 4 MMLU points.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.82\linewidth]{figures/fig3_compute_curve.png}
+\caption{Held-out FineWeb-Edu loss against layers per token on Ouro-1.4B (32 chunks of 1,024 tokens).
+Ouro's gate (thresholds 0.05--0.9) lies below fixed rounds; our per-layer router lies above both.}
+\label{fig:compute}
+\end{figure}
+
+\paragraph{Why it lost.}
+\Cref{fig:compute} places the router above even fixed compute: 2.433 nats at 78 layers, against 2.368 for 3
+fixed rounds at 72 and 2.351 for the gate at 70. Its per-token layer count correlates \emph{negatively} with
+token difficulty under the base model (Spearman $-0.23$; the gate: $+0.42$). The per-token decisions are not
+noise: replacing them with each layer's majority action raises loss to 2.542, and shuffling them across
+tokens to 2.573. The cheapest saving is dropping round 4, worth only 0.025 nats per token, and the gate
+takes it; the router skips none of round 4 and thins round 3 instead, and never chooses ``twice''. Our
+reading, not yet tested directly: a head deciding one layer at a time sees that skipping any single late
+layer hurts, and cannot see that skipping all 24 together is nearly free.
+
+\paragraph{A structured router recovers the gate.}
+We rebuilt the router around that diagnosis: at each round boundary a token stops, or stops after
+re-running the second half of the round once more (+12 layers). With Ouro frozen, every option's per-token
+loss is fixed, so we train on the exact expected loss, with no sampling, warm-started from Ouro's gate at
+three compute prices, against a stop-only control. On held-out FineWeb-Edu all variants land on the gate's
+curve to within 0.001 nats (2.3372 vs 2.3362 at 70 layers per token), about 0.09 nats better than the
+per-layer router; the training method was the problem. But neither beats the gate, and training drives the
+extra half-round from 0.25\% of tokens to 0.01\%; at evaluation it is never used. Re-running half a round
+raises a token's loss on average by 0.99, 0.93, 0.73 and 0.68 nats after rounds 1--4. It helps 16--20\% of
+tokens by about 0.13 nats each, but those tokens are identifiable only in hindsight.
 
 \section{Related work}
-\textbf{Per-token computation in frozen models.} EGLR~\citep{bhattacharjee2026eglr} re-applies the
-top layers at high-entropy tokens and the Tell-Tale Norm~\citep{zhang2026telltale} recurses layers
-guided by hidden-state norms; both decide from the current token, after its pass. Think-at-Hard~\citep{fu2025thinkathard}
-adds whole-model iterations for hard tokens with a trained backbone. \textbf{Programs of layers.}
-CoLa~\citep{li2025cola} searches per-sample skip/repeat chains, POLAR~\citep{li2026polar} learns
-programs of layers, and Dr.LLM~\citep{heakl2025drllm} trains sequence-level routers. \textbf{Static
-loops.} Inner Loop Inference~\citep{lys2026innerloop} and Training-Free Looped
-Transformers~\citep{chen2026trainingfreeloop} loop fixed blocks. \textbf{Routers versus oracles.}
-\citet{glavas2024dynamic} find per-token skip controllers no better than a constant input, and
-Duo-LLM~\citep{alizadeh2024duo} finds large gaps between oracles and learned routers.
-\citet{wei2026earlyexit} argue skip headroom is shrinking in modern models. \textbf{Adaptive
-depth with training.} ACT~\citep{graves2016act}, universal transformers~\citep{dehghani2019universal},
-CALM~\citep{schuster2022calm}, mixture-of-depths~\citep{raposo2024mod}.
+\textbf{Per-token computation in frozen models.} EGLR~\citep{bhattacharjee2026eglr} re-applies the top layers
+at high-entropy tokens and the Tell-Tale Norm~\citep{zhang2026telltale} recurses layers guided by hidden-state
+norms. Think-at-Hard~\citep{fu2025thinkathard} adds whole-model iterations for hard tokens with a trained
+backbone. \textbf{Programs of layers.} CoLa~\citep{li2025cola} searches per-sample skip/repeat chains,
+POLAR~\citep{li2026polar} learns programs of layers, and Dr.LLM~\citep{heakl2025drllm} trains sequence-level
+routers. \textbf{Static loops.} Inner Loop Inference~\citep{lys2026innerloop} and Training-Free Looped
+Transformers~\citep{chen2026trainingfreeloop} loop fixed blocks in frozen models, with gains within noise.
+\textbf{Routers versus oracles.} \citet{glavas2024dynamic} find per-token skip controllers no better than a
+constant input, Duo-LLM~\citep{alizadeh2024duo} finds large gaps between oracles and learned routers, and
+\citet{wei2026earlyexit} argue skip headroom is shrinking in modern models. Our results extend these to
+loops, swaps and multi-edit paths, with an exact oracle, and contrast them with a gate trained in.
+\textbf{Looped models.} Ouro~\citep{zhu2025ouro} pretrains recurrence with a learned exit; universal
+transformers~\citep{dehghani2019universal} and ACT~\citep{graves2016act} are its antecedents.
 
 \section{Limitations}
-The oracle is a hindsight upper bound: it picks the best of 140 outcomes per token, which rewards
-any edit that perturbs a wrong prediction. Per-token deltas ignore effects on later tokens; E5
-measures that gap. Routers are linear, the model is a single 2B checkpoint, and loss is measured
-with teacher forcing.
+Main results use 1.4B--2B-parameter models, and the per-token oracles are 20k-token runs. Our routers trained
+on about 10M tokens, against 7.7T for Ouro's gate. Benchmark scoring has each answer token attend to the other
+tokens' base-pass keys and values; this is exact for its own prediction and matches Ouro's evaluation, but is
+not a deployed decoding loop. Compute is counted in layer applications, not wall-clock time.
+
+\section{Conclusion}
+Per-token compute allocation is real, but it has to be learned jointly with the model. Fitted to a frozen
+network, routers find nothing, although a hindsight oracle promises large gains; a gate trained with the
+network finds benchmark gains at matched compute. The useful granularity so far is coarse: ``how many rounds''
+beat ``which layer, how many times'', although the second contains the first. A router can choose how much of
+a model's trained recurrence each token gets, but new kinds of looping have to be trained into the model itself.
+
+\paragraph{Code and data.} \url{https://github.com/Kaula-AI/layer-looping}
 
 \bibliographystyle{plainnat}
 \bibliography{references}

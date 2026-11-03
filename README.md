@@ -17,7 +17,7 @@ Tyler Gee · [Kāula](https://kaula.ai)
 > - A router trained *with* the model works. Ouro-1.4B's built-in exit gate beats fixed compute on ARC-Easy by +3.6 points at equal compute (paired p < 0.0001).
 > - Our finer per-layer skip/once/twice router, trained on about 10M tokens, loses to that coarse gate on 4 of 5 benchmarks.
 >
-> The LaTeX paper draft in `paper/` predates these results and still shows `[pending]`.
+> The paper in `paper/` (`make` builds `paper.pdf`, `make arxiv` builds the arXiv bundle) reports these results.
 
 ![Gate vs router](docs/figures/fig2_gate_vs_router.png)
 
