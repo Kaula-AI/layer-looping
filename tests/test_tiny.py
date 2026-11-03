@@ -90,6 +90,24 @@ def test_routed_single_token_matches_oracle():
         assert (routed[:, :t] - base[:, :t]).abs().max() < 1e-5  # causal: earlier tokens untouched
 
 
+@torch.no_grad()
+def test_injected_state_and_noise_null():
+    """noise_null.py: run_program(x0=hs[l], start=l+1) replays skip@l, and zero-size noise is the base pass."""
+    from noise_null import noise_deltas
+    hs, kvs, _, cs = G.base_pass(IDS)
+    base = list(range(L))
+    assert (G.run_program(hs, kvs, cs, base, x0=hs[2], start=2) - hs[-1]).abs().max() < TOL
+    for l in [l_ for l_ in range(1, L - 1) if l_ not in G.kv_sources]:
+        skip = G.run_program(hs, kvs, cs, base[:l] + base[l + 1 :])
+        assert (G.run_program(hs, kvs, cs, base, x0=hs[l], start=l + 1) - skip).abs().max() < TOL, l
+    d = noise_deltas(G, hs, kvs, cs, IDS, G.nll(hs[-1], IDS), [(l, 0, 0.0) for l in range(L)],
+                     torch.Generator().manual_seed(0))
+    assert d.abs().max() < TOL
+    d = noise_deltas(G, hs, kvs, cs, IDS, G.nll(hs[-1], IDS), [(l, 0, 1.0) for l in range(L)],
+                     torch.Generator().manual_seed(0))
+    assert d.abs().max() > 10 * TOL  # real noise moves the loss
+
+
 if __name__ == "__main__":
     for f in [test_manual_matches_hf, test_swap_identity, test_oracle_exact_all_ops,
               test_routed_single_token_matches_oracle]:
