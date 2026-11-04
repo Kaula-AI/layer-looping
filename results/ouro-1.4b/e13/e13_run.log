@@ -1,0 +1,53 @@
+....................................                                     [100%]
+36 passed in 109.20s (0:01:49)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+40 chunks x 512 tokens, 387 programs (repeat: 192, skip: 96, swap: 95, block: 1, exit: 3), device cuda
+4/40 chunks | 0.4 min | ETA 3.8 min
+8/40 chunks | 0.8 min | ETA 3.3 min
+12/40 chunks | 1.2 min | ETA 2.9 min
+16/40 chunks | 1.7 min | ETA 2.5 min
+20/40 chunks | 2.1 min | ETA 2.1 min
+24/40 chunks | 2.5 min | ETA 1.7 min
+28/40 chunks | 2.9 min | ETA 1.2 min
+32/40 chunks | 3.3 min | ETA 0.8 min
+36/40 chunks | 3.7 min | ETA 0.4 min
+40/40 chunks | 4.1 min | ETA 0.0 min
+saved oracle_out_quick_Ouro-1.4B/oracle.npz  (20,440 positions)
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] [transformers] You are using a model of type `ouro` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py:723: FutureWarning: `rope_scaling` is deprecated and will be removed in a future version. Set `rope_parameters` instead, with `rope_type` and `rope_theta` included.
+  warnings.warn(
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+40 chunks x 512 tokens, 1152 noise programs (96 layers x 4 draws x scales [0.5, 1.0, 2.0]), device cuda
+4/40 chunks | 1.7 min | ETA 15.2 min
+8/40 chunks | 3.4 min | ETA 13.7 min
+12/40 chunks | 5.1 min | ETA 11.9 min
+16/40 chunks | 6.8 min | ETA 10.2 min
+20/40 chunks | 8.5 min | ETA 8.5 min
+24/40 chunks | 10.2 min | ETA 6.8 min
+28/40 chunks | 11.9 min | ETA 5.1 min
+32/40 chunks | 13.6 min | ETA 3.4 min
+36/40 chunks | 15.3 min | ETA 1.7 min
+40/40 chunks | 17.0 min | ETA 0.0 min
+saved oracle_out_quick_Ouro-1.4B/noise.npz  (20,440 positions)
+held-out positions 4,088, base NLL 1.715, real options 387
+  noise scale 0.5: N=384  real 0.617  noise 0.363 (59% of real)  corrected +0.254 [+0.170, +0.334]
+  noise scale 1: N=384  real 0.617  noise 0.573 (93% of real)  corrected +0.044 [+0.023, +0.067]
+  noise scale 2: N=384  real 0.617  noise 0.741 (120% of real)  corrected -0.124 [-0.167, -0.083]
+saved oracle_out_quick_Ouro-1.4B/selection/selection.json and selection.png
+held-out positions 4,088, base NLL 1.715, real options 194
+  noise scale 0.5: N=194  real 0.516  noise 0.302 (58% of real)  corrected +0.214 [+0.142, +0.284]
+  noise scale 1: N=194  real 0.516  noise 0.490 (95% of real)  corrected +0.026 [+0.006, +0.048]
+  noise scale 2: N=194  real 0.516  noise 0.660 (128% of real)  corrected -0.144 [-0.184, -0.104]
+saved oracle_out_quick_Ouro-1.4B/selection_cost0/selection.json and selection.png
+done (noise)

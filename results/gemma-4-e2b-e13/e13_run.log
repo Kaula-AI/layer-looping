@@ -1,0 +1,46 @@
+....................................                                     [100%]
+36 passed in 80.12s (0:01:20)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Generating test split:   0%|          | 0/4358 [00:00<?, ? examples/s]Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 267319.56 examples/s]
+Generating train split:   0%|          | 0/1801350 [00:00<?, ? examples/s]Generating train split:   2%|▏         | 38000/1801350 [00:00<00:04, 372532.48 examples/s]Generating train split:   5%|▍         | 83000/1801350 [00:00<00:04, 408701.08 examples/s]Generating train split:   8%|▊         | 145000/1801350 [00:00<00:04, 407326.28 examples/s]Generating train split:  10%|█         | 188000/1801350 [00:00<00:03, 412126.04 examples/s]Generating train split:  14%|█▎        | 245000/1801350 [00:00<00:03, 395197.78 examples/s]Generating train split:  16%|█▌        | 289000/1801350 [00:00<00:03, 405110.87 examples/s]Generating train split:  18%|█▊        | 332000/1801350 [00:00<00:03, 411397.14 examples/s]Generating train split:  21%|██        | 376000/1801350 [00:00<00:03, 416467.73 examples/s]Generating train split:  24%|██▎       | 427000/1801350 [00:01<00:03, 382854.45 examples/s]Generating train split:  26%|██▌       | 468000/1801350 [00:01<00:03, 387140.99 examples/s]Generating train split:  29%|██▊       | 514000/1801350 [00:01<00:03, 402703.67 examples/s]Generating train split:  31%|███       | 559000/1801350 [00:01<00:03, 412994.10 examples/s]Generating train split:  33%|███▎      | 602000/1801350 [00:01<00:03, 392727.81 examples/s]Generating train split:  36%|███▌      | 647000/1801350 [00:01<00:02, 405103.43 examples/s]Generating train split:  38%|███▊      | 689000/1801350 [00:01<00:02, 405737.83 examples/s]Generating train split:  41%|████      | 735000/1801350 [00:01<00:02, 416659.23 examples/s]Generating train split:  44%|████▍     | 797000/1801350 [00:01<00:02, 411205.61 examples/s]Generating train split:  47%|████▋     | 839000/1801350 [00:02<00:02, 409381.95 examples/s]Generating train split:  49%|████▉     | 883000/1801350 [00:02<00:02, 412507.15 examples/s]Generating train split:  52%|█████▏    | 943675/1801350 [00:02<00:02, 390635.37 examples/s]Generating train split:  55%|█████▍    | 987675/1801350 [00:02<00:02, 402596.26 examples/s]Generating train split:  57%|█████▋    | 1030675/1801350 [00:02<00:01, 407915.59 examples/s]Generating train split:  60%|█████▉    | 1076675/1801350 [00:02<00:01, 420957.50 examples/s]Generating train split:  63%|██████▎   | 1142675/1801350 [00:02<00:01, 399479.35 examples/s]Generating train split:  66%|██████▌   | 1188675/1801350 [00:02<00:01, 411677.69 examples/s]Generating train split:  70%|██████▉   | 1252675/1801350 [00:03<00:01, 413748.43 examples/s]Generating train split:  73%|███████▎  | 1308675/1801350 [00:03<00:01, 392790.76 examples/s]Generating train split:  75%|███████▌  | 1352675/1801350 [00:03<00:01, 401388.28 examples/s]Generating train split:  77%|███████▋  | 1395675/1801350 [00:03<00:01, 405375.25 examples/s]Generating train split:  80%|███████▉  | 1440675/1801350 [00:03<00:00, 415023.90 examples/s]Generating train split:  83%|████████▎ | 1499675/1801350 [00:03<00:00, 392896.25 examples/s]Generating train split:  86%|████████▌ | 1545675/1801350 [00:03<00:00, 405790.21 examples/s]Generating train split:  88%|████████▊ | 1591675/1801350 [00:03<00:00, 418428.21 examples/s]Generating train split:  92%|█████████▏| 1652675/1801350 [00:04<00:00, 408862.70 examples/s]Generating train split:  95%|█████████▌| 1714675/1801350 [00:04<00:00, 391103.74 examples/s]Generating train split:  98%|█████████▊| 1762675/1801350 [00:04<00:00, 408854.51 examples/s]Generating train split: 100%|██████████| 1801350/1801350 [00:04<00:00, 403782.81 examples/s]
+Generating validation split:   0%|          | 0/3760 [00:00<?, ? examples/s]Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 340338.02 examples/s]
+Generating train split:   0%|          | 0/7473 [00:00<?, ? examples/s]Generating train split: 100%|██████████| 7473/7473 [00:00<00:00, 263909.76 examples/s]
+Generating test split:   0%|          | 0/1319 [00:00<?, ? examples/s]Generating test split: 100%|██████████| 1319/1319 [00:00<00:00, 158713.80 examples/s]
+40 chunks x 512 tokens, 140 programs (repeat: 70, skip: 35, swap: 34, block: 1), device cuda
+4/40 chunks | 0.1 min | ETA 1.0 min
+8/40 chunks | 0.2 min | ETA 0.9 min
+12/40 chunks | 0.3 min | ETA 0.7 min
+16/40 chunks | 0.4 min | ETA 0.6 min
+20/40 chunks | 0.5 min | ETA 0.5 min
+24/40 chunks | 0.6 min | ETA 0.4 min
+28/40 chunks | 0.7 min | ETA 0.3 min
+32/40 chunks | 0.8 min | ETA 0.2 min
+36/40 chunks | 0.9 min | ETA 0.1 min
+40/40 chunks | 1.0 min | ETA 0.0 min
+saved oracle_out_quick/oracle.npz  (20,440 positions)
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+40 chunks x 512 tokens, 420 noise programs (35 layers x 4 draws x scales [0.5, 1.0, 2.0]), device cuda
+4/40 chunks | 0.5 min | ETA 4.3 min
+8/40 chunks | 0.9 min | ETA 3.7 min
+12/40 chunks | 1.4 min | ETA 3.2 min
+16/40 chunks | 1.8 min | ETA 2.8 min
+20/40 chunks | 2.3 min | ETA 2.3 min
+24/40 chunks | 2.8 min | ETA 1.8 min
+28/40 chunks | 3.3 min | ETA 1.4 min
+32/40 chunks | 3.7 min | ETA 0.9 min
+36/40 chunks | 4.2 min | ETA 0.5 min
+40/40 chunks | 4.7 min | ETA 0.0 min
+saved oracle_out_quick/noise.npz  (20,440 positions)
+held-out positions 4,088, base NLL 1.892, real options 140
+  noise scale 0.5: N=140  real 0.806  noise 0.743 (92% of real)  corrected +0.063 [+0.048, +0.080]
+  noise scale 1: N=140  real 0.806  noise 0.823 (102% of real)  corrected -0.017 [-0.034, +0.000]
+  noise scale 2: N=140  real 0.806  noise 0.850 (105% of real)  corrected -0.044 [-0.078, -0.015]
+saved oracle_out_quick/selection/selection.json and selection.png
+held-out positions 4,088, base NLL 1.892, real options 69
+  noise scale 0.5: N=69  real 0.690  noise 0.626 (91% of real)  corrected +0.064 [+0.046, +0.079]
+  noise scale 1: N=69  real 0.690  noise 0.715 (104% of real)  corrected -0.026 [-0.038, -0.013]
+  noise scale 2: N=69  real 0.690  noise 0.742 (108% of real)  corrected -0.052 [-0.077, -0.029]
+saved oracle_out_quick/selection_cost0/selection.json and selection.png
+done (noise)

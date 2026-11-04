@@ -1,0 +1,5 @@
+held-out positions 4,088, base NLL 1.715, real options 194
+  noise scale 0.5: N=194  real 0.516  noise 0.302 (58% of real)  corrected +0.214 [+0.142, +0.284]
+  noise scale 1: N=194  real 0.516  noise 0.490 (95% of real)  corrected +0.026 [+0.006, +0.048]
+  noise scale 2: N=194  real 0.516  noise 0.660 (128% of real)  corrected -0.144 [-0.184, -0.104]
+saved oracle_out_quick_Ouro-1.4B/selection_cost0/selection.json and selection.png

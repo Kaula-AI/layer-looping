@@ -1,0 +1,16 @@
+The repository ByteDance/Ouro-1.4B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B .
+ You can inspect the repository content at https://hf.co/ByteDance/Ouro-1.4B.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] 40 chunks x 512 tokens, 1152 noise programs (96 layers x 4 draws x scales [0.5, 1.0, 2.0]), device cuda
+4/40 chunks | 1.7 min | ETA 15.2 min
+8/40 chunks | 3.4 min | ETA 13.7 min
+12/40 chunks | 5.1 min | ETA 11.9 min
+16/40 chunks | 6.8 min | ETA 10.2 min
+20/40 chunks | 8.5 min | ETA 8.5 min
+24/40 chunks | 10.2 min | ETA 6.8 min
+28/40 chunks | 11.9 min | ETA 5.1 min
+32/40 chunks | 13.6 min | ETA 3.4 min
+36/40 chunks | 15.3 min | ETA 1.7 min
+40/40 chunks | 17.0 min | ETA 0.0 min
+saved oracle_out_quick_Ouro-1.4B/noise.npz  (20,440 positions)
