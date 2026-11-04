@@ -123,6 +123,8 @@ All code paths are written and pass the CPU tests, for Gemma-2 and Gemma-4. Port
 Quick run on E2B done 2026-10-31 (`results/gemma-4-e2b-quick/`, summary in `EXPERIMENTS.md`): large oracle
 headroom, but no router or heuristic beats no-edit. Rounds 1–3 (fp32, self-selection, paths + MLP
 controller, LoRA-trained loops) also negative; see `EXPERIMENTS.md`.
+E13 noise null done 2026-11-04 on E2B and Ouro-1.4B: selection on both (random perturbations of a layer's
+own update size recover 93–102% of the oracle gain at matched N); see `EXPERIMENTS.md` → E13.
 
 ## Tasks, in order
 Follow `EXPERIMENTS.md`. Concretely:

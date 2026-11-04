@@ -53,6 +53,23 @@ with chunk-bootstrap CI, gains by base-NLL quintile; the same with `--max_cost 0
 - Signal: < 25%, with the corrected CI excluding 0 at every scale. Layer edits carry structure noise lacks; revisit the
   routers (the oracle is reachable in principle) and soften the paper's "selection" claim.
 
+**Result (run 2026-11-04, one H100, `bash run_experiments.sh noise`; 4,088 held-out positions per model).**
+Artifacts: `results/gemma-4-e2b-e13/`, `results/ouro-1.4b/e13/` (`selection*/selection.json`, logs; `.npz` not in git).
+At matched N, gain in nats/token, corrected = real − noise [95% chunk-bootstrap CI]:
+
+| Model | N | real | noise s=0.5 | noise s=1 | noise s=2 | corrected at s=1 |
+|---|---|---|---|---|---|---|
+| Gemma-4 E2B | 140 | 0.806 | 0.743 (92%) | 0.823 (102%) | 0.850 (105%) | −0.017 [−0.034, +0.000] |
+| E2B, cost ≤ 0 | 69 | 0.690 | 0.626 (91%) | 0.715 (104%) | 0.742 (108%) | −0.026 [−0.038, −0.013] |
+| Ouro-1.4B | 384 | 0.617 | 0.363 (59%) | 0.573 (93%) | 0.741 (120%) | +0.044 [+0.023, +0.067] |
+| Ouro, cost ≤ 0 | 194 | 0.516 | 0.302 (58%) | 0.490 (95%) | 0.660 (128%) | +0.026 [+0.006, +0.048] |
+
+**Read-out: selection, on both models.** At the best-matching scale (s = 1, also the pre-registered natural size), noise
+recovers ≥ 93% of the real gain, and real and noise curves rise in parallel from N = 1 to the full option set. The
+paper's claim stands. Caveats: (1) Ouro keeps a small residual at s = 1 (+0.044 nats, ~7% of the real gain, CI excludes 0),
+an upper bound on routable signal there; (2) the share depends on noise size, steeply on Ouro (59% at s = 0.5), so the
+claim is "random perturbations of the size of a layer's own update match it", not "any noise does".
+
 ## E1 Headroom by op (the go/no-go, ~$1 quick, ~$2 full)
 **Question.** How much does the best single edit help each token? Which ops and layers win, and how often is a skip free?
 **Hypotheses.**

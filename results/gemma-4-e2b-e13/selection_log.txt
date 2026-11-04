@@ -1,0 +1,5 @@
+held-out positions 4,088, base NLL 1.892, real options 140
+  noise scale 0.5: N=140  real 0.806  noise 0.743 (92% of real)  corrected +0.063 [+0.048, +0.080]
+  noise scale 1: N=140  real 0.806  noise 0.823 (102% of real)  corrected -0.017 [-0.034, +0.000]
+  noise scale 2: N=140  real 0.806  noise 0.850 (105% of real)  corrected -0.044 [-0.078, -0.015]
+saved oracle_out_quick/selection/selection.json and selection.png

@@ -1,0 +1,12 @@
+40 chunks x 512 tokens, 420 noise programs (35 layers x 4 draws x scales [0.5, 1.0, 2.0]), device cuda
+4/40 chunks | 0.5 min | ETA 4.3 min
+8/40 chunks | 0.9 min | ETA 3.7 min
+12/40 chunks | 1.4 min | ETA 3.2 min
+16/40 chunks | 1.8 min | ETA 2.8 min
+20/40 chunks | 2.3 min | ETA 2.3 min
+24/40 chunks | 2.8 min | ETA 1.8 min
+28/40 chunks | 3.3 min | ETA 1.4 min
+32/40 chunks | 3.7 min | ETA 0.9 min
+36/40 chunks | 4.2 min | ETA 0.5 min
+40/40 chunks | 4.7 min | ETA 0.0 min
+saved oracle_out_quick/noise.npz  (20,440 positions)
