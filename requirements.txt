@@ -1,5 +1,5 @@
 torch>=2.3
-transformers>=4.48
+transformers>=5.5   # Gemma-4
 datasets
 accelerate
 scikit-learn
