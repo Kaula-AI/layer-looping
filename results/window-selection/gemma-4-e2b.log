@@ -1,0 +1,43 @@
+held-out positions 4,088; gains in nats/token; corrected = real - noise [95% chunk CI]
+
+== options: all  (real 140; static best-on-train real edit: -0.013)
+  noise scale 0.5, N=140 (static best noise option: -0.001)
+    W=   1: real 0.806  noise 0.743 (92%)  corrected +0.063 [+0.047, +0.080]  windows helped 1.00/1.00
+    W=   8: real 0.248  noise 0.216 (87%)  corrected +0.032 [+0.021, +0.043]  windows helped 1.00/1.00
+    W=  32: real 0.080  noise 0.063 (79%)  corrected +0.017 [+0.005, +0.029]  windows helped 0.99/1.00
+    W= 128: real 0.019  noise 0.019 (99%)  corrected +0.000 [-0.010, +0.012]  windows helped 0.88/1.00
+    W= 511: real 0.004  noise 0.003 (88%)  corrected +0.000 [-0.004, +0.007]  windows helped 0.38/1.00
+  noise scale 1, N=140 (static best noise option: -0.009)
+    W=   1: real 0.806  noise 0.823 (102%)  corrected -0.017 [-0.034, +0.000]  windows helped 1.00/1.00
+    W=   8: real 0.248  noise 0.210 (85%)  corrected +0.038 [+0.026, +0.052]  windows helped 1.00/0.99
+    W=  32: real 0.080  noise 0.062 (78%)  corrected +0.018 [+0.005, +0.029]  windows helped 0.99/0.97
+    W= 128: real 0.019  noise 0.014 (74%)  corrected +0.005 [-0.002, +0.013]  windows helped 0.88/0.72
+    W= 511: real 0.004  noise 0.003 (79%)  corrected +0.001 [-0.003, +0.005]  windows helped 0.38/0.38
+  noise scale 2, N=140 (static best noise option: -0.151)
+    W=   1: real 0.806  noise 0.850 (105%)  corrected -0.044 [-0.075, -0.017]  windows helped 1.00/0.99
+    W=   8: real 0.248  noise 0.189 (77%)  corrected +0.058 [+0.042, +0.075]  windows helped 1.00/0.89
+    W=  32: real 0.080  noise 0.035 (44%)  corrected +0.045 [+0.036, +0.055]  windows helped 0.99/0.60
+    W= 128: real 0.019  noise 0.001 (3%)  corrected +0.019 [+0.010, +0.031]  windows helped 0.88/0.03
+    W= 511: real 0.004  noise 0.000 (0%)  corrected +0.004 [+0.000, +0.009]  windows helped 0.38/0.00
+
+== options: cost<=0  (real 69; static best-on-train real edit: -0.020)
+  noise scale 0.5, N=69 (static best noise option: -0.001)
+    W=   1: real 0.690  noise 0.648 (94%)  corrected +0.042 [+0.022, +0.060]  windows helped 1.00/1.00
+    W=   8: real 0.215  noise 0.174 (81%)  corrected +0.041 [+0.029, +0.050]  windows helped 1.00/1.00
+    W=  32: real 0.067  noise 0.050 (74%)  corrected +0.017 [+0.006, +0.032]  windows helped 0.98/1.00
+    W= 128: real 0.016  noise 0.015 (98%)  corrected +0.000 [-0.008, +0.011]  windows helped 0.78/0.94
+    W= 511: real 0.003  noise 0.003 (97%)  corrected +0.000 [-0.004, +0.006]  windows helped 0.25/0.88
+  noise scale 1, N=69 (static best noise option: -0.009)
+    W=   1: real 0.690  noise 0.676 (98%)  corrected +0.014 [-0.002, +0.028]  windows helped 1.00/1.00
+    W=   8: real 0.215  noise 0.166 (77%)  corrected +0.049 [+0.043, +0.056]  windows helped 1.00/0.98
+    W=  32: real 0.067  noise 0.048 (71%)  corrected +0.019 [+0.005, +0.035]  windows helped 0.98/0.91
+    W= 128: real 0.016  noise 0.010 (63%)  corrected +0.006 [-0.001, +0.013]  windows helped 0.78/0.62
+    W= 511: real 0.003  noise 0.001 (45%)  corrected +0.001 [-0.000, +0.004]  windows helped 0.25/0.25
+  noise scale 2, N=69 (static best noise option: -0.151)
+    W=   1: real 0.690  noise 0.729 (106%)  corrected -0.040 [-0.061, -0.019]  windows helped 1.00/0.98
+    W=   8: real 0.215  noise 0.148 (69%)  corrected +0.066 [+0.051, +0.082]  windows helped 1.00/0.84
+    W=  32: real 0.067  noise 0.029 (43%)  corrected +0.038 [+0.029, +0.047]  windows helped 0.98/0.52
+    W= 128: real 0.016  noise 0.001 (3%)  corrected +0.015 [+0.007, +0.027]  windows helped 0.78/0.03
+    W= 511: real 0.003  noise 0.000 (0%)  corrected +0.003 [+0.000, +0.008]  windows helped 0.25/0.00
+
+saved results/window-selection/gemma-4-e2b/window_selection.json and window_selection.png
