@@ -70,6 +70,31 @@ paper's claim stands. Caveats: (1) Ouro keeps a small residual at s = 1 (+0.044 
 an upper bound on routable signal there; (2) the share depends on noise size, steeply on Ouro (59% at s = 0.5), so the
 claim is "random perturbations of the size of a layer's own update match it", not "any noise does".
 
+## E13b Window-level selection screen (run 2026-11-09, CPU, from E13's saved files)
+**Question.** Library of Layers (arXiv 2611.03526) routes windows of tokens, not single tokens, and finds per-token
+routing unstable. Does a frozen model's hindsight gain survive, or turn into signal, when W consecutive tokens must
+share one choice?
+**Method.** `window_selection.py`: same options, matched N and held-out chunks as E13. Each window takes the one option
+minimising the **sum** of its tokens' single-token oracle deltas (base if none helps); real edit = same program at every
+token, noise = same (layer, draw) with independent directions. Approximate: ignores the within-window interaction gap
+(E5), which would only subtract more. W = 1 reproduces E13 exactly.
+**Result** (nats/token, held-out; artifacts `results/window-selection/`):
+
+| W | E2B real | E2B noise s=1 | E2B real − noise [CI] | Ouro real | Ouro noise s=1 | Ouro real − noise [CI] |
+|---|---|---|---|---|---|---|
+| 1 | 0.806 | 0.823 | −0.017 [−0.034, +0.000] | 0.617 | 0.573 | +0.044 [+0.024, +0.068] |
+| 8 | 0.248 | 0.210 | +0.038 [+0.026, +0.052] | 0.217 | 0.210 | +0.007 [+0.002, +0.013] |
+| 32 | 0.080 | 0.062 | +0.018 [+0.005, +0.029] | 0.095 | 0.092 | +0.004 [−0.002, +0.010] |
+| 128 | 0.019 | 0.014 | +0.005 [−0.002, +0.013] | 0.037 | 0.037 | −0.000 [−0.006, +0.007] |
+| 511 | 0.004 | 0.003 | +0.001 [−0.003, +0.005] | 0.010 | 0.014 | −0.004 [−0.006, −0.001] |
+
+Static best-on-train edit for every token: −0.013 (E2B), −0.001 (Ouro). Cost ≤ 0 options give the same picture.
+**Read-out.** Coarser routing does not rescue frozen-model headroom: the hindsight gain falls ~3× by W = 8, ~10× by W = 32
+and is gone by a whole chunk, for real edits and noise alike. E2B keeps a small edge over noise at W = 8–32 (+0.02–0.04
+nats, 15–25% of the real gain, CI excludes 0), an upper bound before interaction losses; Ouro has none past W = 1. (Noise
+at s = 2 falls faster only because large noise is consistently harmful.) Not worth an exact window-level run on a frozen
+model. LoL's window routing works because it is trained jointly with the model, consistent with Finding 1 / takeaway 1.
+
 ## E1 Headroom by op (the go/no-go, ~$1 quick, ~$2 full)
 **Question.** How much does the best single edit help each token? Which ops and layers win, and how often is a skip free?
 **Hypotheses.**
