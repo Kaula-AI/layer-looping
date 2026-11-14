@@ -177,10 +177,40 @@ def fig_skip_map():
     plt.close(fig)
 
 
+def fig_noise_null():
+    """E13 and E13b: best-of-N layer edits vs best-of-N random noise (s = 1), per token and per window."""
+    runs = [("Gemma-4 E2B", BLUE, "results/gemma-4-e2b-e13", "results/window-selection/gemma-4-e2b"),
+            ("Ouro-1.4B", ORANGE, "results/ouro-1.4b/e13", "results/window-selection/ouro-1.4b")]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4))
+    for name, c, sel, win in runs:
+        cv = load(f"{sel}/selection/selection.json")["curves"]
+        a1.plot(cv["real"]["n"], cv["real"]["gain"], "o-", color=c, lw=2, ms=4, label=f"{name}: layer edits")
+        a1.plot(cv["noise s=1"]["n"], cv["noise s=1"]["gain"], "o--", color=c, lw=1.5, ms=3, alpha=0.75,
+                label=f"{name}: random noise")
+        bw = load(f"{win}/window_selection.json")["by_options"]["all"]["by_scale"]["1"]["by_window"]
+        Ws = sorted(int(w) for w in bw)
+        a2.plot(Ws, [bw[str(w)]["real"] for w in Ws], "o-", color=c, lw=2, ms=4)
+        a2.plot(Ws, [bw[str(w)]["noise"] for w in Ws], "o--", color=c, lw=1.5, ms=3, alpha=0.75)
+    for ax in (a1, a2):
+        ax.set_xscale("log")
+        ax.grid(color=GRID, lw=0.8)
+        ax.set_axisbelow(True)
+    a1.set_xlabel("Options per token (best chosen knowing the answer)")
+    a1.set_ylabel("Hindsight loss reduction (nats/token)")
+    a1.set_title("Per token: noise keeps pace with layer edits")
+    a1.legend(frameon=False, fontsize=8.5)
+    a2.set_xlabel("Tokens that must share one choice (window size)")
+    a2.set_title("Sharing a choice erases both")
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig5_noise_null.png"), dpi=200)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     fig_hindsight()
     fig_gate_vs_router()
     fig_compute_curve()
     fig_skip_map()
+    fig_noise_null()
     print("wrote", sorted(os.listdir(OUT)))

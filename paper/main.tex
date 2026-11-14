@@ -40,7 +40,9 @@ per token cuts loss by 0.60--0.80 nats on held-out text at no extra compute, and
 to 1.30. None of it is reachable. Ridge and MLP routers, reading the current or the previous token's
 internals, interpretable or raw features, and training-free entropy and norm rules from prior work all
 fail to beat ``no edit''; the hindsight gain grows with the number of options and sits on tokens the model
-already gets wrong, the signature of selection rather than signal. Light fine-tuning does not teach a
+already gets wrong, the signature of selection rather than signal. A noise control confirms it: picking
+the best of as many random perturbations of the same size recovers 93--102\% of the gain, and requiring
+windows of tokens to share one edit erases real and random gains alike. Light fine-tuning does not teach a
 standard model to use a loop. Per-token compute does pay off when the router is trained with the model:
 Ouro's built-in exit gate beats a fixed compute budget on ARC-Easy by $+3.6$ points at equal compute
 (paired $p<10^{-4}$). A finer per-layer skip/once/twice router trained on frozen Ouro loses to that gate on
@@ -67,7 +69,8 @@ coarse per-token exit gate gives benchmark gains at matched compute. Our contrib
   \item \textbf{An exact per-token oracle} over repeat, skip, swap, block-loop and exit edits in a frozen
         model, computed for all positions in about one forward pass per edit (\cref{sec:method}).
   \item \textbf{A negative result for frozen-model routing} across feature sets, router classes, lag, and
-        training-free baselines, with three checks that the hindsight gain is selection, not signal (\cref{sec:frozen}).
+        training-free baselines, with a noise control and three further checks that the hindsight gain is selection,
+        not signal (\cref{sec:frozen}).
   \item \textbf{A positive result for trained-in routing}: paired benchmark comparisons of Ouro-1.4B's exit
         gate against fixed compute (\cref{sec:ouro}).
   \item \textbf{A diagnosis of why a finer router loses} to that gate, and a structured router that
@@ -170,6 +173,33 @@ MLP controller's best point stays at no edit. \emph{It sits on tokens the model 
 the most confident fifth of tokens are helped, against all of the least confident three fifths. A per-token
 oracle over many edits measures how often \emph{some} perturbation happens to favor the right token.
 
+\paragraph{A noise control.}
+We tested this directly, with a read-out fixed before running. For every token and layer $\ell$ we add a
+random-direction vector of norm $s\,\lVert h_{\ell+1}-h_\ell\rVert$ to the token's input to layer $\ell$
+($s=1$: the size of the layer's own update; four directions per layer), run the rest of the model with the
+diagonal swap, and take the best of as many perturbations as there are real edits (\cref{fig:noise}, left).
+At $s=1$ noise recovers 102\% of the real gain on E2B (0.823 vs 0.806 nats, $N=140$) and 93\% on Ouro
+(0.573 vs 0.617, $N=384$), with parallel curves at every $N$. Real minus noise is $-0.017$ [$-0.034$, $0.000$]
+on E2B and $+0.044$ [$+0.023$, $+0.067$] on Ouro, an upper bound on routable signal there. The match depends on
+size: at $s=0.5$ noise recovers 92\% on E2B but 59\% on Ouro.
+
+\paragraph{Coarser routing does not help.}
+Library of Layers~\citep{rahmani2026lol}, trained from scratch, routes windows of tokens and reports per-token
+routing unstable. We screened whether a frozen model's gain survives when $W$ consecutive tokens must share one
+option, summing their single-token deltas (\cref{fig:noise}, right; this ignores within-window interactions,
+which can only subtract). The gain falls about $3\times$ by $W=8$ and $10\times$ by $W=32$, for real edits and
+noise alike, and vanishes at one choice per 512-token chunk. E2B keeps an edge over noise of $+0.02$ to $+0.04$
+nats at $W=8$--$32$; Ouro keeps none.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig5_noise_null.png}
+\caption{Left: hindsight gain against options per token, for real layer edits (solid) and random
+perturbations of the layer's own update size (dashed). Right: the same when windows of consecutive tokens must
+share one choice. 4,088 held-out positions per model.}
+\label{fig:noise}
+\end{figure}
+
 \paragraph{Light fine-tuning does not teach a loop.}
 On E2B we trained LoRA~\citep{hu2022lora} adapters (rank 16, about 6M tokens) with layers 5--8 looped
 twice and the loop's output mixed in by a learnable weight $\alpha$ initialized at 0, or by a learned
@@ -256,8 +286,9 @@ tokens by about 0.13 nats each, but those tokens are identifiable only in hindsi
 at high-entropy tokens and the Tell-Tale Norm~\citep{zhang2026telltale} recurses layers guided by hidden-state
 norms. Think-at-Hard~\citep{fu2025thinkathard} adds whole-model iterations for hard tokens with a trained
 backbone. \textbf{Programs of layers.} CoLa~\citep{li2025cola} searches per-sample skip/repeat chains,
-POLAR~\citep{li2026polar} learns programs of layers, and Dr.LLM~\citep{heakl2025drllm} trains sequence-level
-routers. \textbf{Static loops.} Inner Loop Inference~\citep{lys2026innerloop} and Training-Free Looped
+POLAR~\citep{li2026polar} learns programs of layers, Dr.LLM~\citep{heakl2025drllm} trains sequence-level
+routers, and Library of Layers~\citep{rahmani2026lol} pretrains a model whose router orders blocks from a
+shared library per window of tokens, deciding each window from earlier ones. \textbf{Static loops.} Inner Loop Inference~\citep{lys2026innerloop} and Training-Free Looped
 Transformers~\citep{chen2026trainingfreeloop} loop fixed blocks in frozen models, with gains within noise.
 \textbf{Routers versus oracles.} \citet{glavas2024dynamic} find per-token skip controllers no better than a
 constant input, Duo-LLM~\citep{alizadeh2024duo} finds large gaps between oracles and learned routers, and
