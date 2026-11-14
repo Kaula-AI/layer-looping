@@ -13,7 +13,7 @@ Tyler Gee · [Kāula](https://kaula.ai)
 ---
 
 > **Findings so far** ([full write-up](docs/findings.md)):
-> - In hindsight, the best per-token layer edit cuts loss by 0.6–0.9 nats per token on every model tested, but no router fitted to a frozen model captures any of it. The gain is mostly selection after seeing the answer.
+> - In hindsight, the best per-token layer edit cuts loss by 0.6–0.9 nats per token on every model tested, but no router fitted to a frozen model captures any of it. It is selection after seeing the answer: the best of as many random nudges of the same size recovers 93–102% of it, and routing whole windows of tokens erases both.
 > - A router trained *with* the model works. Ouro-1.4B's built-in exit gate beats fixed compute on ARC-Easy by +3.6 points at equal compute (paired p < 0.0001).
 > - Our finer per-layer skip/once/twice router, trained on about 10M tokens, loses to that coarse gate on 4 of 5 benchmarks.
 >

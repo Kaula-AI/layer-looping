@@ -1,6 +1,6 @@
 # Can a language model choose its own layers, token by token?
 
-*Kāula research note, November 1, 2026. Code, data and every number below: [github.com/Kaula-AI/layer-looping](https://github.com/Kaula-AI/layer-looping).*
+*Kāula research note, November 1, 2026; updated November 13, 2026 with Finding 7. Code, data and every number below: [github.com/Kaula-AI/layer-looping](https://github.com/Kaula-AI/layer-looping).*
 
 A transformer runs every token through the same fixed stack of layers. We wanted to know whether that has to be so. Could each token take its own path through the network: loop a layer three times, skip the next, revisit an earlier one? Hard tokens would get more depth and easy tokens less.
 
@@ -9,7 +9,7 @@ We tested this on four models, from GPT-2 to a model trained to loop. Benchmarks
 ## Summary
 
 - **In hindsight, per-token paths look very powerful.** If you choose each token's layer edit after seeing the answer, the loss drops by 0.6 to 0.9 nats per token at no extra compute, on every model we tried.
-- **No router could choose those paths in advance.** Linear and MLP routers, interpretability features, raw hidden states, confidence-based self-selection and training-free rules from prior work all failed to beat "no edit" when fitted to a frozen model. Most of the hindsight gain comes from picking the best of many small perturbations after seeing the answer.
+- **No router could choose those paths in advance.** Linear and MLP routers, interpretability features, raw hidden states, confidence-based self-selection and training-free rules from prior work all failed to beat "no edit" when fitted to a frozen model. A control explains why: picking the best of the same number of random nudges recovers 93–102% of the hindsight gain, and routing whole windows of tokens instead of single tokens doesn't change that.
 - **Per-token compute does pay off when the router is trained with the model.** Ouro-1.4B was pretrained to loop and has a learned exit gate. That gate beats a fixed compute budget on ARC-Easy by +3.6 points at the same compute (paired p < 0.0001) and matches full-compute accuracy elsewhere with 14–33% fewer layers.
 - **Our finer-grained router lost to that coarse gate.** We trained a per-layer router (skip, run once or run twice at each of Ouro's 96 unrolled layers) for about 10M tokens. It was worse than Ouro's built-in gate on 4 of 5 benchmarks while using more compute. A diagnostic shows why: it gives *less* compute to hard tokens, and per-layer decisions never discovered the cheapest saving, dropping the last round.
 - **Trained properly, a router matches Ouro's gate but can't add loops.** With few structured actions and the exact expected loss, a router recovers Ouro's gate to within 0.001 nats. Offered the option to re-run half a round, it never used it: on average that raises the loss by 0.7–1.0 nats.
@@ -36,7 +36,7 @@ The cost of a path is the number of layer applications. The question is whether 
 
 *Blue: loss reduction if each token gets its best single edit, chosen knowing the answer. Orange: the best trained router at zero extra compute. GPT-2 and Qwen3 are pilots that apply each edit to the whole sequence; Gemma-4 E2B and Ouro-1.4B use the exact per-token oracle.*
 
-Three checks say the hindsight gain is mostly selection, not signal:
+Three checks say the hindsight gain is mostly selection, not signal (Finding 7 adds a direct control):
 
 - **It isn't numerical noise.** Recomputing Gemma-4 E2B's oracle in float32 gives the same −0.81 nats as bf16 (per-edit correlation 0.9999).
 - **It grows with the number of options.** With multi-edit paths the hindsight gain rises from −0.87 (single edits) to −0.97 (a shared path library) to −1.30 (per-token beam search). That's what picking the best of more lottery tickets looks like.
@@ -109,16 +109,30 @@ The router drove the "re-run half a round" option from 0.25% down to 0.01% of to
 
 Ouro only benefits from the loop it was trained on, whole rounds, and even a whole fifth round added nothing on the benchmarks.
 
+## Finding 7: random noise matches the hindsight gain, and coarser routing doesn't change that
+
+Finding 1 argued that the hindsight gain is mostly selection. We tested that directly, with a rule fixed before running ([E13](../EXPERIMENTS.md)). For every token we replaced each layer edit with a random nudge to the token's input to one layer, the size of that layer's own update, and took the best of the same number of nudges in hindsight.
+
+![Noise null](figures/fig5_noise_null.png)
+
+*Left: hindsight gain against the number of options per token, for real layer edits (solid) and random nudges (dashed). Right: the same when a window of consecutive tokens must share one choice. 4,088 held-out positions per model.*
+
+- **Noise keeps pace with real edits.** At the full option set, random nudges recover **102%** of the real gain on Gemma-4 E2B (0.823 vs 0.806 nats per token) and **93%** on Ouro-1.4B (0.573 vs 0.617). The two curves rise together from 1 option to all of them.
+- **What's left over is small.** Ouro keeps +0.044 nats [+0.023, +0.067] that noise doesn't explain, about 7% of its hindsight gain. That's the most any router could hope to find there. E2B keeps nothing.
+- **Noise size matters.** At half the size, noise recovers 92% on E2B but only 59% on Ouro. The accurate claim is that random nudges *the size of a layer's own update* match layer edits.
+
+[Library of Layers](https://arxiv.org/abs/2611.03526), published the same week, routes windows of tokens rather than single tokens and reports that per-token routing was unstable to train. So we asked whether a frozen model's hindsight gain survives when neighbouring tokens must share one choice ([E13b](../EXPERIMENTS.md)). It doesn't. The gain falls about 3× by windows of 8 tokens and 10× by 32, for real edits and noise alike, and is gone at one choice per 512-token chunk. E2B keeps a small edge over noise at 8–32 tokens (+0.02 to +0.04 nats). That's an upper bound: the screen adds up single-token effects and ignores how edits inside a window interact. Ouro keeps none.
+
 ## What we take from this
 
 1. **Per-token compute allocation is real, but it has to be learned jointly with the model.** Fitting a router to a frozen network finds nothing; a gate trained alongside the network finds benchmark-level gains.
-2. **The useful granularity so far is coarse.** "How many rounds" beat "which layer, how many times," even though the second strictly contains the first. More options made the hindsight gain bigger and the learned policy worse: the per-layer router never discovered the coordinated "stop after round 3" that the gate gets for free.
-3. **Hindsight oracles mislead here.** A per-token oracle over many edits measures how often *some* perturbation happens to favor the right token. Report it, but don't read it as reachable headroom.
+2. **The useful granularity so far is coarse.** "How many rounds" beat "which layer, how many times," even though the second strictly contains the first. More options made the hindsight gain bigger and the learned policy worse: the per-layer router never discovered the coordinated "stop after round 3" that the gate gets for free. Coarseness alone isn't the fix, though: routing windows of tokens in a frozen model finds nothing either (Finding 7).
+3. **Hindsight oracles mislead here.** A per-token oracle over many edits measures how often *some* perturbation happens to favor the right token: random nudges of the same size score 93–102% as well. Report it next to a noise control, and don't read it as reachable headroom.
 4. **A router can only spend computation the model already knows how to use.** It can choose how much of the model's trained recurrence each token gets, and Ouro's gate already does that near-optimally. New kinds of looping have to be trained into the model itself.
 
 ## Open questions
 
-- **Recurrence the model is trained to use.** Since routers can't unlock loops a model never learned, the next step is to train recurrence in: for example, a recurrent state carried from one token's late layers into the next token's middle layers, retrofitted into a pretrained LLM.
+- **Recurrence the model is trained to use.** Since routers can't unlock loops a model never learned, the next step is to train recurrence in: for example, a recurrent state carried from one token's late layers into the next token's middle layers, retrofitted into a pretrained LLM. Library of Layers suggests two ingredients our LoRA attempt (Finding 2) lacked: a small learned scale and bias per application, so a repeated layer knows which pass it is on, and growing the number of loops during training.
 - **Does any of this hold at larger scale?** The next target is a loop-converted Qwen3-8B (LoopUS, arXiv 2605.11011), whose built-in halting is decided per sequence rather than per token.
 
 ## Limitations
@@ -133,12 +147,14 @@ Ouro only benefits from the loop it was trained on, whole rounds, and even a who
 All results are in `results/`; the experiment log is `EXPERIMENTS.md`.
 
 ```bash
-python -m pytest -q tests                                               # 33 CPU exactness tests
+python -m pytest -q tests                                               # 36 CPU exactness tests
 python oracle.py --model ByteDance/Ouro-1.4B --n_tokens 20000 --out ouro_quick && python probe.py --path ouro_quick/oracle.npz --out_dir ouro_quick
 python bench.py --model ByteDance/Ouro-1.4B --policies base rounds:3 gate:0.2 --out bench   # benchmarks
 python routed_ouro.py --variant router --no_lora --target_layers 72 --out r5/router72_frozen  # our router
 python bench_compare.py --dir bench ... --a gate:0.2 --b rounds:3 --metric acc_norm        # paired tests
 python diagnose_router.py --ckpt r5/router72_frozen/model.pt --out diag                     # why the router lost
 python structured_router.py train --out sr && python structured_router.py eval --heads sr/heads.pt --out sr  # Finding 6
+bash run_experiments.sh noise && MODEL=ByteDance/Ouro-1.4B bash run_experiments.sh noise   # Finding 7: noise control
+python window_selection.py --oracle results/gemma-4-e2b-e13/oracle.npz --noise results/gemma-4-e2b-e13/noise.npz --out ws  # window screen
 python scripts/make_findings_figs.py                                      # these figures
 ```
