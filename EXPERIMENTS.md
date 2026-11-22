@@ -37,6 +37,12 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 - *Conclusion so far:* per-token compute routing pays off on benchmarks when the router is trained with the model, not when it is fitted to a frozen one. Stage 2 (`routed_ouro.py`) trains a per-layer skip/once/twice router jointly with LoRA, against a LoRA-only control.
 - *Stage 2 (artifacts in `results/ouro-1.4b/stage2/`):* router + LoRA r16, 1200 × 8 × 1024 FineWeb-Edu tokens, target 72 layers/token. Two Lagrangian runs collapsed to ~10–18 layers (all heads flip together); a two-sided quadratic penalty with an annealed target was stable. Final: 73.2 layers/token, 26.6% skips, 0.5% twice; held-out NLL 2.314 vs the LoRA control's 2.278 at 96. Benchmarks (acc_norm, paired): vs control at 3 rounds (72 layers), MMLU +9.2 [+6.2, +12.2] p < 1e-4, Winogrande +2.2 (p = 0.07), HellaSwag −1.2 (n.s.; acc −2.2, p = 0.001); vs control at 96 layers, MMLU −1.1 and Winogrande +0.1 (n.s.), ARC −2.3/−2.7 (p < 0.02). **But** the LoRA fine-tune itself cost MMLU (0.669 → 0.632 at 96 layers; 3-round exit 0.643 → 0.529), and the original Ouro with its own gate beats the router model on 4 of 5 tasks (MMLU 0.667 at 80 layers vs 0.621 at 76). Router-only on frozen Ouro (`--no_lora`, same recipe): 73.9 layers/token in training but 79–84 at eval (argmax vs Gumbel samples); held-out NLL 2.417. Paired vs original Ouro's gate:0.2 it is worse on 4 of 5 tasks while using more layers (acc_norm ARC-C −3.2, ARC-E −1.8, HellaSwag −3.1, MMLU −4.4, all p < 0.05; Winogrande +0.8 n.s.). Ouro's own exit gate remains the best per-token compute policy found on Ouro.
 
+## E14 Training-free damped looping under fair controls (designed 2026-11-22, not run)
+**Question.** Does running a mid-stack window as K damped sub-steps (TFLT, arXiv 2605.23872), uniformly for every
+token, lower held-out NLL by more than zero-compute changes to the same window (mean shift, norm change, update
+rescaling) and a size-matched sham, with every arm tuned on separate data? MMLU is tested only where NLL passes. Models: Qwen3-1.7B-Base, Qwen3-4B-Base, Gemma-4 E2B.
+Full design, rivals, decision rule and red-team in [`DESIGN.md`](DESIGN.md); frozen plan will go in `SPEC.md`.
+
 ## E13 Noise null: selection or signal? (pre-registered 2026-11-02)
 **Question.** How much of the hindsight oracle gain does best-of-N over random perturbations of the same size recover?
 **Method.** `noise_null.py`: for every token and every (layer l, draw j, scale s), add a random-direction vector of norm
