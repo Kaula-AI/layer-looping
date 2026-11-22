@@ -126,7 +126,8 @@ controller, LoRA-trained loops) also negative; see `EXPERIMENTS.md`.
 E13 noise null done 2026-11-04 on E2B and Ouro-1.4B: selection on both (random perturbations of a layer's
 own update size recover 93–102% of the oracle gain at matched N); see `EXPERIMENTS.md` → E13.
 E14 (training-free damped looping, arXiv 2605.23872, under fair controls) designed 2026-11-22 in `DESIGN.md`;
-not run. Ouro is not in E14.
+local pilot done the same day (`loop_wrap.py`, `e14.py`, `e14_pilot.py`): TFLT's config raises NLL on
+Qwen3-1.7B-Base. GPU stage A awaits Tyler. Ouro is not in E14.
 
 ## Tasks, in order
 Follow `EXPERIMENTS.md`. Concretely:

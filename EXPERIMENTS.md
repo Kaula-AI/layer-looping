@@ -42,6 +42,10 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 token, lower held-out NLL by more than zero-compute changes to the same window (mean shift, norm change, update
 rescaling) and a size-matched sham, with every arm tuned on separate data? MMLU is tested only where NLL passes. Models: Qwen3-1.7B-Base, Qwen3-4B-Base, Gemma-4 E2B.
 Full design, rivals, decision rule and red-team in [`DESIGN.md`](DESIGN.md); frozen plan will go in `SPEC.md`.
+**Pilot (2026-11-22, Mac, Qwen3-1.7B-Base, `results/e14-pilot/`):** at TFLT's own config ([12–15], K=2) the loop
+raises tuning NLL by +0.056 nats/token [+0.044, +0.069] (GSM8K +0.105, WikiText +0.007) and lowers the MMLU gold
+margin by 0.13 nats on 570 items; the window does not contract (Stage 2 dropped for this model). Details in
+DESIGN.md §5.1; a ~$1 GPU stage A with a futility stop is proposed in §5.2.
 
 ## E13 Noise null: selection or signal? (pre-registered 2026-11-02)
 **Question.** How much of the hindsight oracle gain does best-of-N over random perturbations of the same size recover?

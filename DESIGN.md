@@ -7,8 +7,8 @@ in `SPEC.md`; this file is where they are argued.
 
 ## E14: training-free damped looping under fair controls
 
-**Status (2026-11-22):** designed and red-teamed (§4), not run. Next: pilot (§5), then `SPEC.md` with its hash
-published (step 6). No GPU time has been spent.
+**Status (2026-11-22):** designed, red-teamed (§4) and piloted locally on Qwen3-1.7B-Base (§5.1). Next: Tyler's
+call on the GPU stage (§5.2), then `SPEC.md` with its hash published (step 6). No GPU time has been spent.
 
 ### 1. Decision
 
@@ -234,6 +234,65 @@ Rough GPU estimate before the pilot (one RTX 4090): about 370 tuning configs per
 configs on MMLU validation, then ~16 scored configs on MMLU test and 4 on each secondary. Roughly 8 h for 4B, 4 h for
 1.7B and 5 h for E2B: 15–25 GPU-hours (~$5–17). Re-estimated from the pilot and approved by Tyler before any rental.
 
+#### 5.1 Pilot results (2026-11-22, M1 Mac, MPS, bf16, commit 242f52e)
+
+Artifacts: `results/e14-pilot/qwen3-1.7b-base/` (`summary.json` written by `e14_pilot.py`; per-job files; the per-token
+NLL `.npz` is not in git). Window [12–15] throughout (TFLT's for this model). This is a pilot, not a test of the claim.
+
+- **Tests.** `tests/test_loop_wrap.py`: 40 pass (all 76 in `tests/` pass). Planting the cache bug the red-team
+  described (sub-steps keep the model's cache) fails the reference and cache tests on Qwen3 and on Gemma-4 layers
+  that own K/V. Dropping the recorded masks fails the reference test.
+- **Tuning-text NLL** (40,880 tokens, 40 WikiText + 40 GSM8K chunks; base 1.411 nats/token). Paired change vs base,
+  95% chunk-bootstrap CI:
+
+  | Arm | All | WikiText | GSM8K |
+  |---|---|---|---|
+  | loop K=2, β=0 (TFLT's config) | **+0.056** [+0.044, +0.069] | +0.007 [+0.003, +0.010] | +0.105 [+0.094, +0.117] |
+  | loop K=2, β=0.5 | +0.012 [+0.009, +0.015] | +0.001 [−0.001, +0.002] | +0.023 [+0.020, +0.027] |
+  | loop K=3, β=0 | +0.084 [+0.066, +0.102] | | |
+  | repeat (full strength) | +0.211 [+0.176, +0.246] | +0.070 | +0.352 |
+
+  At TFLT's own configuration the loop **raises** loss, almost all of it on GSM8K text. Weaker loops (β = 0.5) hurt
+  less. The known mover works: full-strength repeat hurts most.
+- **What the loop changes** (K=2, β=0): ‖δ‖/‖u‖ = 0.26 and cos(δ, u) = −0.46, so the loop's change partly *opposes*
+  the window's own update (its projection on u is about −0.12·u). The residual norm shrinks: ‖loop‖/‖g(x₀)‖ = 0.966.
+- **Contraction** (8,192 tokens), ‖g(x_k) − x_k‖ / ‖u‖ for k = 0…7: undamped 1.00, 0.91, 0.91, 0.97, 1.06, 1.15,
+  1.26, 1.37; damped (step ½) 1.00, 0.89, 0.87, 0.88, 0.92, 0.96, 1.01, 1.06. The window has no fixed point within
+  reach: the residual shrinks by at most 13%, then grows.
+- **MMLU 5-shot**, first 10 items per subject (570 test items):
+  - Base 67.5%. TFLT reports 62.68% on the full set; this subset weights subjects equally, so H0 cannot be judged
+    from it.
+  - TFLT's config 66.3%, a paired change of −1.2 points [−3.7, +1.1]; 8.2% of items discordant (20 better, 27 worse).
+  - Exploratory (not in the pilot plan): the gold answer's log-prob margin over the best wrong answer falls by
+    0.131 nats [0.091, 0.169]. The letter prior barely moves (mean P(A) 0.261 → 0.247).
+- **Determinism.** In the smoke run (57 items, scratch output), two base runs agreed on every item with identical
+  log-likelihoods. The pilot's repeat run ran out of GPU memory under swap and has no result.
+- **Speed.** Wall-clock on this Mac is unreliable: swap reached 7 GB and the loop's MMLU run took 11× base. In
+  isolation (scratch benchmark, batch 2 × 1,100 tokens) the loop takes 1.12× base with or without the cache, in line
+  with its 4 extra layers on 28. GPU estimates use layer counts.
+- **Disclosure.** The pilot scored TFLT's published config on 570 MMLU test items. No config was chosen with them;
+  the full R0 run includes them.
+
+#### 5.2 Consequences (proposed for `SPEC.md`)
+
+1. **Rival grids**, bracketed by the measured change: `rescale` α ∈ {0.8, 0.88, 0.94, 1.06}; `norm-const`
+   c ∈ {0.94, 0.97, 0.985, 1.015}. Both are extended if the best is on an edge.
+2. **Scored text size:** ~260k tokens (≈ 500 chunks) per model. The sd of chunk-mean paired deltas, 0.057 nats at
+   TFLT's config, gives a CI half-width of ε/2 there.
+3. **MMLU power:** with 8.2% discordance, the paired CI on all 14,042 items is about ±0.47 points (not ±0.33). A
+   −0.3-point non-inferiority margin would then require a positive effect, so the P2 margin becomes **−0.5 points**.
+4. **Futility stop (new).** After the loop's tuning grid on both Qwen models, if no loop config lowers tuning NLL
+   below `base` by at least ε/2 = 0.005 on either model, the rival arms and scored NLL runs are not run, and E14
+   reports FAIL by futility (H0 and R0 still run). The loop must beat `base` to pass, and a config that cannot beat it
+   even on the data it was chosen on will not clear ε on held-out data. This saves most of the GPU budget if the
+   pilot's picture holds.
+5. **Stage 2 is dropped for Qwen3-1.7B:** there is nothing to converge to. The contraction check runs again on 4B and
+   E2B (minutes); Stage 2 is revived only if one of them contracts.
+
+**Proposed GPU stage A** (one RTX 4090, ~1.5 h, ~$1): H0 and R0 on all of MMLU 5-shot for both Qwen models (base and
+TFLT's config); the loop's 84-config tuning grid on both Qwen models; contraction on 4B and E2B. Then the futility
+check. Stage B (the rest of §3, ~15–25 h, ~$5–17) only if the loop survives it.
+
 ### 6. Known limitations, fixed in advance
 
 - No generation tasks: TFLT's KV-cache variants and decode-time behaviour are not tested.
@@ -269,3 +328,7 @@ configs on MMLU validation, then ~16 scored configs on MMLU test and 4 on each s
 - **2026-11-22, after red-team.** NLL is the primary outcome with a provisional SESOI of 0.01 nats/token; `mean-shift`
   and `norm-const` added as zero-compute comparators; shams draw donors from other sequences; implementation goes
   through a HuggingFace-layer wrapper rather than `G4`; selection uses continuous metrics.
+- **2026-11-22, after the pilot** (Tyler: "Yes, run the pilot"). Pilot on the Mac with MMLU cut to 10 items per
+  subject (swap pressure). TFLT's config raises tuning NLL on Qwen3-1.7B-Base; the window does not contract. Proposed
+  for `SPEC.md`: bracketed rival grids, ~260k scored tokens, P2 margin −0.5 points, a futility stop after the loop's
+  tuning grid, Stage 2 dropped unless 4B or E2B contracts. GPU split into stage A (~$1) and stage B.
