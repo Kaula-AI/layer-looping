@@ -7,3 +7,4 @@ scipy
 matplotlib
 pytest
 sae-lens>=6   # only for sae_features.py
+lm-eval==0.4.11   # E14 (e14.py), MC scoring as in TFLT

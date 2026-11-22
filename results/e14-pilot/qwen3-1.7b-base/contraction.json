@@ -1,0 +1,57 @@
+{
+ "n_chunks": 16,
+ "window": [
+  12,
+  15
+ ],
+ "undamped": [
+  1.0,
+  0.9063016066579203,
+  0.9103588470040935,
+  0.9726294127462428,
+  1.0565218393583353,
+  1.1526358617495185,
+  1.2591264728464027,
+  1.3733653387678113
+ ],
+ "damped": [
+  1.0,
+  0.8912379942294902,
+  0.8691304051946054,
+  0.8837227270794474,
+  0.915069647264574,
+  0.9574408409880099,
+  1.0080091920617509,
+  1.0648879706276373
+ ],
+ "note": "mean over positions >= 1 of ||g(x_k) - x_k|| / ||g(x_0) - x_0||, k = 0..7; undamped x <- g(x), damped x <- x + (g(x) - x)/2",
+ "provenance": {
+  "commit": "242f52e7b31a4f4760e2a99c0db3b4c12b669372",
+  "dirty": false,
+  "model": "Qwen/Qwen3-1.7B-Base",
+  "dtype": "torch.bfloat16",
+  "device": "macOS-26.6.2-arm64-arm-64bit",
+  "torch": "2.15.0",
+  "transformers": "5.22.1",
+  "lm_eval": "0.4.11",
+  "time": "2026-11-22T02:07:17-0700",
+  "script": "e14_pilot.py",
+  "args": {
+   "model": "Qwen/Qwen3-1.7B-Base",
+   "out": "results/e14-pilot/qwen3-1.7b-base",
+   "device": "mps",
+   "batch": 2,
+   "text_tokens": 40960,
+   "contraction_tokens": 8192,
+   "mmlu_limit": 10,
+   "jobs": [
+    "text_diag",
+    "contraction",
+    "mmlu_base_1",
+    "mmlu_tflt",
+    "mmlu_base_2"
+   ]
+  }
+ },
+ "wall_seconds": 89.51335024833679
+}
