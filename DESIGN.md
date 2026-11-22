@@ -98,7 +98,7 @@ Window family for every windowed arm: centre ∈ {0.40, 0.45, …, 0.70}·N (7),
 | `rescale` | `x₀ + α·u` | 21 windows × 4 α, log-spaced around 1, bracketing the pilot's ‖δ‖/‖u‖ | 0 |
 | `mean-shift` | `g(x₀) + s·δ̄` | the loop's top 21 configs × s ∈ {0.5, 1, 2, 4} = 84 | 0 |
 | `norm-const` | `c·g(x₀)` | 21 windows × 4 c, bracketing the pilot's ‖x_loop‖/‖g(x₀)‖ | 0 |
-| `sham-perm` | `g(x₀) + σ·δ_donor`, donor = same position in a different sequence | σ ∈ {0.25, 0.5, 1, 2} at the loop's selected config | as `loop` |
+| `sham-perm` | `g(x₀) + σ·‖δ_t‖·δ_donor/‖δ_donor‖`: the recipient's own size, the donor's direction; donor = same position in a different sequence | σ ∈ {0.25, 0.5, 1, 2} at the loop's selected config | as `loop` |
 | `repeat` | `g(g(x₀))` (full strength; a known mover, should hurt) | 21 windows | width |
 | *diagnostic* `norm-match` | `g(x₀)·‖x_loop‖/‖g(x₀)‖` per token | the loop's selected config | as `loop` |
 | *diagnostic* `sham-iso` | `g(x₀) + ‖δ_t‖·u_t`, u_t a random unit vector | the loop's selected config | as `loop` |
