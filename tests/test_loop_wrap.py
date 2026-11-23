@@ -1,6 +1,7 @@
 """
-CPU tests for loop_wrap.py (E14, DESIGN.md §3.8) on a tiny random Qwen3 and the tiny random Gemma-4 with K/V
-sharing, per-layer embeddings, layer scalars and a sliding window shorter than the test sequences:
+CPU tests for loop_wrap.py (E14, DESIGN.md §3.8) on a tiny random Qwen3, a tiny Qwen3.5 hybrid (Gated DeltaNet
++ full attention), and the tiny random Gemma-4 with K/V sharing, per-layer embeddings, layer scalars and a
+sliding window shorter than the test sequences:
   1. every arm at its identity setting is an exact no-op (K=1, beta=1, alpha=1, c=1, s=0, sigma=0)
   2. damped loop == an independent reference built from the unwrapped model with hooks (HF's own forward
      computes every g(x_k); the reference never touches the wrapper), past the sliding window
@@ -51,11 +52,27 @@ def _gemma():
     return m
 
 
-QWEN, GEMMA = _qwen(), _gemma()
+def _qwen35():
+    """Tiny Qwen3.5 hybrid: Gated DeltaNet (linear attention) layers with one full-attention layer in four."""
+    from transformers import Qwen3_5ForCausalLM, Qwen3_5TextConfig
+    cfg = Qwen3_5TextConfig(
+        vocab_size=97, hidden_size=64, intermediate_size=128, num_hidden_layers=8, num_attention_heads=4,
+        num_key_value_heads=2, head_dim=16, linear_key_head_dim=16, linear_value_head_dim=16, linear_num_key_heads=2,
+        linear_num_value_heads=4, linear_conv_kernel_dim=4, max_position_embeddings=512, initializer_range=0.2,
+        layer_types=["linear_attention"] * 3 + ["full_attention"] + ["linear_attention"] * 3 + ["full_attention"],
+        tie_word_embeddings=False)
+    cfg._attn_implementation = "eager"
+    return Qwen3_5ForCausalLM(cfg).float().eval()
+
+
+QWEN, GEMMA, QWEN35 = _qwen(), _gemma(), _qwen35()
 # (model, window a, b, sequence length). Gemma: layers 4-6 are K/V-shared (they read layers 2/3), and T = 40 is
 # past the sliding window of 16, so the sliding masks recorded for each layer are exercised in the sub-steps.
 # gemma_lo: two sliding layers with their own K/V (they write the cache; the shared layers 4-7 never do).
-CASES = {"qwen": (QWEN, 1, 3, 24), "gemma": (GEMMA, 4, 6, 40), "gemma_lo": (GEMMA, 0, 1, 40)}
+# qwen35_mixed: linear + full-attention layers in one window; qwen35_linear: linear-attention layers only (their
+# recurrent state is rebuilt from the current sub-step states in every sub-step, like attention's current K/V).
+CASES = {"qwen": (QWEN, 1, 3, 24), "gemma": (GEMMA, 4, 6, 40), "gemma_lo": (GEMMA, 0, 1, 40),
+         "qwen35_mixed": (QWEN35, 2, 5, 40), "qwen35_linear": (QWEN35, 4, 6, 40)}
 TOL = 2e-4
 
 

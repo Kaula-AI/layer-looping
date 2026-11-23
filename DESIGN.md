@@ -22,7 +22,9 @@ On 2026-11-18 Tyler proposed that looping happen **at inference only**, followin
   selection result extends from per-token edits to uniform loops), and the next direction is recurrence trained
   into the model (e.g. retrofitted recurrence, arXiv 2511.07384). That path needs a separate budget decision.
 
-The decision is taken on the two Qwen models, TFLT's own setting. Gemma-4 E2B is a generalization readout (§3.2).
+The decision is taken on two **decision models**: Qwen3-4B-Base (TFLT's best base-model case) and Qwen3.5-4B-Base
+(the newest small Qwen base model, February 2026). Qwen3-1.7B-Base is kept for the reproduction only, and Gemma-4
+E2B is a generalization readout (§3.2).
 
 ### 2. Claim and rivals
 
@@ -70,13 +72,25 @@ are +0.34 points on MMLU for both Qwen3-1.7B-Base and 4B-Base.
 
 #### 3.2 Models
 
-| Model | Layers | Role |
-|---|---|---|
-| Qwen3-1.7B-Base | 28 | Decision model. TFLT config [12–15], K = 2: MMLU 5-shot 62.68 → 63.01. Fits the Mac for the pilot. |
-| Qwen3-4B-Base | 36 | Decision model. TFLT config [15–18], K = 3: MMLU 5-shot 73.27 → 73.61 (its Table 13 gives a 73.01 base for the same window; the paper is inconsistent). |
-| Gemma-4 E2B | 35 | Generalization readout, this project's model. |
+| Model | Released | Layers | Role |
+|---|---|---|---|
+| Qwen3-1.7B-Base | Apr 2025 | 28 | Reproduction (R0) and the local pilot only. TFLT config [12–15], K = 2: MMLU 5-shot 62.68 → 63.01. |
+| Qwen3-4B-Base | Apr 2025 | 36 | Decision model and R0. TFLT config [15–18], K = 3: MMLU 5-shot 73.27 → 73.61 (its Table 13 gives a 73.01 base for the same window; the paper is inconsistent). |
+| Qwen3.5-4B-Base | Feb 2026 | 32 | Decision model, the current generation. Not in TFLT, so no R0. |
+| Gemma-4 E2B | Apr 2026 | 35 | Generalization readout, this project's model. |
 
 Ouro-1.4B is dropped: it is already trained to loop, so damped sub-steps inside its rounds are a different question.
+Newer Qwen releases (3.6 in April, 3.8 in August 2026) are 27B or larger or instruct-only, so they do not fit one
+24 GB GPU as base models. Gemma-4 E4B (42 layers, 18 K/V-shared) is a drop-in alternative to E2B if a larger
+generalization model is wanted.
+
+**Qwen3.5 is a hybrid.** Three of every four layers are Gated DeltaNet (linear attention; pattern LLLF), so a window
+mixes linear-attention layers with at most a few full-attention layers. In each sub-step a linear-attention layer
+rebuilds its recurrent state from all positions' current sub-step states. That is the same rule as attention seeing
+current-sub-step K/V, and `tests/test_loop_wrap.py` checks it against an independent reference. TFLT never tested a
+hybrid. Width-4 windows always contain exactly one full-attention layer; width-3 windows may contain none. Every
+selected window's composition is reported. The checkpoint is multimodal (`Qwen3_5ForConditionalGeneration`) and is
+loaded text-only; stage A checks that no language-model weights are missing.
 
 **E2B tests a different operator.** Layers 15–34 read the K/V of layers 13/14, so a window inside 15–34 iterates
 each token's state against fixed memory: only states and queries change. The primary E2B grid excludes windows
@@ -158,18 +172,19 @@ applies the arm, so prompts and scoring match TFLT's.
 `sham-perm`. The loop must beat **every** comparator, which is an intersection-union test and needs no correction
 across comparators.
 
-- **H0, harness parity (gate).** Base MMLU 5-shot on each Qwen model within 0.5 points of TFLT's base. If not, the
-  harness is fixed before anything else is run or scored.
+- **H0, harness parity (gate).** Base MMLU 5-shot on each Qwen3 model within 0.5 points of TFLT's base. If not, the
+  harness is fixed before anything else is run or scored. Qwen3.5-4B-Base has no TFLT number. Its gate is a clean
+  text-only load (no missing language-model weights) and two base runs that agree item for item.
 - **Known movers (gate).** `repeat` must raise tuning NLL, and the letter bias must change MMLU validation accuracy.
   If neither moves, the pipeline cannot detect a change and nothing is scored.
 - **R0, reproduction (descriptive).** TFLT's config on MMLU test, reported as an estimate with a 95% CI and read
   three ways: an effect exists (lower CI > 0); TFLT's size is not reproduced (upper CI < +0.34); or neither.
   TFLT's gain was selected among its top 3 on MMLU, so some shrinkage is expected. If R0 is not reproduced while H0
   passes, the write-up counts that toward the selection rival. R0 does not gate the rest.
-- **PASS.** On at least one Qwen model (97.5% CIs: Bonferroni over the two Qwen models), the loop's P1 gain over each
+- **PASS.** On at least one decision model (97.5% CIs: Bonferroni over the two), the loop's P1 gain over each
   comparator has its lower CI above 0 and its point estimate at or above ε; **and** on that model P2 is non-inferior
-  (lower 95% CI of loop − base, both with letter bias, above −0.3 points). → Stage 2.
-- **FAIL.** On both Qwen models, the upper 95% CI of the loop's P1 gain over the best comparator is below ε. →
+  (lower 95% CI of loop − base, both with letter bias, above −0.5 points; §5.2). → Stage 2.
+- **FAIL.** On both decision models, the upper 95% CI of the loop's P1 gain over the best comparator is below ε. →
   Finding 8 and the trained-recurrence direction.
 - **INCONCLUSIVE.** Anything else, reported as such. The sample-size rule is meant to make this rare.
 - **E2B** gets the same P1 test at 95%, reported as generalization; it does not change the decision.
@@ -185,7 +200,7 @@ across comparators.
 - **fp32** for the Euler steps and the blend; layers run in bf16 as usual.
 - **Fixed batch size**, identical for every arm (no `auto`).
 
-Tests (CPU, tiny random Qwen3 and the tiny Gemma-4 with K/V sharing):
+Tests (CPU; tiny random Qwen3, a tiny Qwen3.5 hybrid, and the tiny Gemma-4 with K/V sharing):
 - K = 1, β = 1, α = 1, s = 0, c = 1 and σ = 0 are exact no-ops through the wrapper.
 - The wrapped model matches the unwrapped one at T ≈ 2,000, past the sliding window.
 - A test that distinguishes attention to current sub-step states from attention to first-pass K/V.
@@ -281,22 +296,30 @@ NLL `.npz` is not in git). Window [12–15] throughout (TFLT's for this model). 
    TFLT's config, gives a CI half-width of ε/2 there.
 3. **MMLU power:** with 8.2% discordance, the paired CI on all 14,042 items is about ±0.47 points (not ±0.33). A
    −0.3-point non-inferiority margin would then require a positive effect, so the P2 margin becomes **−0.5 points**.
-4. **Futility stop (new).** After the loop's tuning grid on both Qwen models, if no loop config lowers tuning NLL
+4. **Futility stop (new).** After the loop's tuning grid on both decision models, if no loop config lowers tuning NLL
    below `base` by at least ε/2 = 0.005 on either model, the rival arms and scored NLL runs are not run, and E14
    reports FAIL by futility (H0 and R0 still run). The loop must beat `base` to pass, and a config that cannot beat it
    even on the data it was chosen on will not clear ε on held-out data. This saves most of the GPU budget if the
    pilot's picture holds.
-5. **Stage 2 is dropped for Qwen3-1.7B:** there is nothing to converge to. The contraction check runs again on 4B and
-   E2B (minutes); Stage 2 is revived only if one of them contracts.
+5. **Stage 2 is dropped for Qwen3-1.7B:** there is nothing to converge to. The contraction check runs again on
+   Qwen3-4B, Qwen3.5-4B and E2B (minutes); Stage 2 is revived only if one of them contracts.
 
-**Proposed GPU stage A** (one RTX 4090, ~1.5 h, ~$1): H0 and R0 on all of MMLU 5-shot for both Qwen models (base and
-TFLT's config); the loop's 84-config tuning grid on both Qwen models; contraction on 4B and E2B. Then the futility
-check. Stage B (the rest of §3, ~15–25 h, ~$5–17) only if the loop survives it.
+**Proposed GPU stage A** (one RTX 4090, ~2 h, ~$1–1.5):
+- H0 and R0 on all of MMLU 5-shot for both Qwen3 models (base and TFLT's config).
+- For Qwen3.5-4B-Base: the load check and two base runs.
+- The loop's 84-config tuning grid on both decision models.
+- Contraction on Qwen3-4B, Qwen3.5-4B and E2B.
+
+Then the futility check. Stage B (the rest of §3 on the decision models and E2B, ~17–27 h, ~$6–19) runs only if the
+loop survives it. The pod installs `flash-linear-attention` and `causal-conv1d` for Qwen3.5. Without them
+transformers falls back to a much slower reference implementation of the linear-attention layers.
 
 ### 6. Known limitations, fixed in advance
 
 - No generation tasks: TFLT's KV-cache variants and decode-time behaviour are not tested.
-- Three models of 1.7B–4B; TFLT reports that small Qwen and Llama models benefit least.
+- Four models of 1.7B–4.7B, two of which decide; TFLT reports that small Qwen and Llama models benefit least. On
+  Qwen3.5 the loop runs over linear-attention layers, which TFLT never tested, so a null there could reflect the
+  hybrid rather than looping in general. Qwen3-4B-Base covers the plain-transformer case.
 - Damped Euler only; TFLT's higher-order solvers did worse in its own tables.
 - Compute is counted in layer applications; wall-clock is reported but not optimised.
 - MMLU alone cannot resolve effects much below ±0.33 points, so a small benchmark effect could be missed.
@@ -332,3 +355,8 @@ check. Stage B (the rest of §3, ~15–25 h, ~$5–17) only if the loop survives
   subject (swap pressure). TFLT's config raises tuning NLL on Qwen3-1.7B-Base; the window does not contract. Proposed
   for `SPEC.md`: bracketed rival grids, ~260k scored tokens, P2 margin −0.5 points, a futility stop after the loop's
   tuning grid, Stage 2 dropped unless 4B or E2B contracts. GPU split into stage A (~$1) and stage B.
+- **2026-11-23** (Tyler: "can we use a more up to date model?"). Qwen3.5-4B-Base (February 2026, the newest small Qwen
+  base model) joins Qwen3-4B-Base as a decision model. Qwen3-1.7B-Base moves to reproduction only, since its R0 cell
+  still needs the paper's own model. E2B (April 2026) stays as generalization. The wrapper handles Qwen3.5's hybrid
+  layers unchanged, and Qwen3.5 cases were added to `tests/test_loop_wrap.py` (all 102 tests in `tests/` pass;
+  planting the cache bug fails them on linear-attention layers too). Stage A grows to ~2 h; stage B to ~17–27 h.
