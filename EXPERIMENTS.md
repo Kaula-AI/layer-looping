@@ -40,7 +40,8 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 ## E14 Training-free damped looping under fair controls (designed 2026-11-22, not run)
 **Question.** Does running a mid-stack window as K damped sub-steps (TFLT, arXiv 2605.23872), uniformly for every
 token, lower held-out NLL by more than zero-compute changes to the same window (mean shift, norm change, update
-rescaling) and a size-matched sham, with every arm tuned on separate data? MMLU is tested only where NLL passes. Models: Qwen3-1.7B-Base, Qwen3-4B-Base, Gemma-4 E2B.
+rescaling) and a size-matched sham, with every arm tuned on separate data? MMLU is tested only where NLL passes. Decision models: Qwen3-4B-Base and
+Qwen3.5-4B-Base (Feb 2026, hybrid); Qwen3-1.7B-Base for the reproduction only; Gemma-4 E2B for generalization.
 Full design, rivals, decision rule and red-team in [`DESIGN.md`](DESIGN.md); frozen plan will go in `SPEC.md`.
 **Pilot (2026-11-22, Mac, Qwen3-1.7B-Base, `results/e14-pilot/`):** at TFLT's own config ([12–15], K=2) the loop
 raises tuning NLL by +0.056 nats/token [+0.044, +0.069] (GSM8K +0.105, WikiText +0.007) and lowers the MMLU gold
