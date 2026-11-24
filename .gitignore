@@ -14,3 +14,6 @@ paper/*.log
 paper/*.out
 paper/main.pdf
 paper/arxiv-submission.tar.gz
+
+# E15 feature cache (large; regenerate with exit_signals.py cache)
+results/e15/cache/
