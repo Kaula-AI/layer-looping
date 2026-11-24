@@ -343,8 +343,135 @@ transformers falls back to a much slower reference implementation of the linear-
 - **Retrofitted recurrence (2511.07384):** the control frozen-model papers lack, a non-recurrent model trained on the
   same data in the same order, plotted against FLOPs; recurrence wins (TinyLlama GSM8K 51.2 vs 45.2).
 
+---
+
+## E15: what should an exit gate read? Hidden state vs attention vs convergence, on Ouro-1.4B
+
+**Status (2026-11-24):** designed and red-teamed (§6); local pilot running. No GPU time spent. E14 stage A is still
+awaiting Tyler's approval; E15 does not depend on it.
+
+### 1. Decision
+
+Tyler plans a small recurrent-depth model in which each token loops a block until it is done (1 to ~1,000 steps;
+discussed 2026-11-24, a separate project). That model needs a halting signal: a learned gate on the hidden state
+(the standard: Ouro, ACT, MoR), the token's own convergence or confidence, attention-derived signals, or a
+zero-parameter rule.
+
+**E15 is a screen, not the decision.** Ouro is frozen, its representation was co-trained with a hidden-state gate,
+it has 4 exits rather than 1,000, and every token computes every round (§5). So:
+- A signal that clearly adds to the hidden state here is carried into the recurrent-depth project, where gates are
+  trained jointly with the model and the final choice is made.
+- A null here means **no evidence either way**: the default hidden-state gate stays, and the signal can still be
+  tried there.
+
+### 2. Claim and rivals
+
+**Claim.** Attention-derived signals (the token's attention pattern, or whether the tokens it reads from have
+settled) improve per-token exit decisions in Ouro-1.4B beyond the hidden state **and** beyond the token's own
+convergence and confidence, at matched compute.
+
+| Rival | How E15 separates it |
+|---|---|
+| **Confidence, not attention.** Prediction entropy, max probability and KL between rounds are nonlinear in the state, so a linear hidden-state gate cannot form them; any arm that includes them can beat `hidden` through them alone. | Every attention verdict is a **nested contrast** against the same arm without attention: `attn+own` vs `own`, `src+own` vs `own`, `all` vs `hidden+own`. If only `own` adds value, the verdict is "confidence helps", not "attention helps". |
+| **Intermediate-layer information, not attention.** `attn` summarizes 24 intermediate layers the end-of-round state never sees. | Twin `layers+own`: the same 24 layers summarized without attention (attention-output, MLP-output and residual-update norms, 72 dims). |
+| **Self and sink, not other tokens.** A source average that includes the token itself or the position-0 sink is mostly self-interaction or sink mass. | `src` excludes the token itself and position 0, then renormalizes. Sham `src-perm`: the same attention weights over source values permuted among the visible positions. |
+| **Position or document boundaries.** Sink mass and entropy track position and EOS boundaries. | Floor `pos`: log position and log tokens since the last EOS. |
+| **Training budget or warm start.** New gates are trained more, or differently, than Ouro's own gate. | `hidden` (from scratch) and `hidden-warm` (from Ouro's gate, as Finding 6); every arm trained to convergence on cached features with its own learning-rate grids. |
+| **Any token information beats none.** | `bias` floor: a static mix of exit rounds, implemented as random per-token rounds, so it can reach any budget. |
+| **Selection on evaluation data.** | Learning rates and transforms chosen on the tuning split; budgets matched on the evaluation split by threshold only (layer counts carry no label information). |
+| **Leakage.** A feature at position t could see the label (token t+1) or a later round. | Features use rounds ≤ r and tokens ≤ t only. Tests check that round-r features ignore later rounds, and that features at t do not change when token t+1 or later tokens change. |
+| **Unmatched compute.** Confidence and attention features need extra computation (a full-vocabulary readout each round, explicit attention probabilities). | Feature cost is charged in layer-equivalents in a secondary comparison (§3). |
+
+### 3. Design
+
+**Exits.** After round r ∈ {1, 2, 3, 4} a token stops (24·r layers). Ouro's evaluation accounting: every token
+computes every round, and its loss comes from its exit round (as `bench.py` and Finding 6).
+
+**Gates.** Stop probability per round λ_r = σ(w_r·f_r + b_r) with the exit distribution of OuroForCausalLM. Weights
+are shared across rounds for `hidden`, `hidden-warm`, `hidden+own` and `all` (as Ouro's gate), and per round for the
+small arms (≤ 100 dims). Trained on the exact expected objective `Σ_r pdf_r (CE_r + price · 24r)`, prices
+{0.0005, 0.001, 0.002} nats per layer, on **cached** features (Ouro is frozen) until the tuning-split objective stops
+improving. Each arm gets separate weight and bias learning-rate grids, extended until the best value is interior.
+Features are standardized (all arms), and KL and norm-ratio features are log-transformed.
+
+**Features at round r** (rounds ≤ r, tokens ≤ t):
+
+| Arm | Inputs | Dims |
+|---|---|---|
+| `ouro-gate` | Ouro's gate, unchanged | — |
+| `hidden`, `hidden-warm` | Ouro's normed end-of-round state | 2,048 |
+| `own` | log KL(p_r ‖ p_{r−1}), log relative state change, entropy and max probability of p_r, round-1 flag | 5 |
+| `hidden+own` | both | 2,053 |
+| `attn+own` | per layer, mean over heads: attention entropy / log(#visible), mass on position 0, mass on self; plus `own` | 77 |
+| `layers+own` | per layer: ‖attention output‖, ‖MLP output‖, ‖residual update‖, each relative to the residual; plus `own` | 77 |
+| `src+own` | at layers 6, 12, 18, 24: attention-weighted mean of the sources' round-r log-KL and entropy, sources excluding self and position 0; plus `own` | 13 |
+| `src-perm+own` | as `src+own`, source values permuted among visible positions | 13 |
+| `all` | `hidden` + `own` + `attn` + `src` | 2,133 |
+| `pos`, `bias` | log position and log tokens since EOS; nothing | 2; 0 |
+| `kl-rule` | zero-parameter rule: exit at round 1 if entropy < τ₁, else at the first round with KL < τ₂ | 2 thresholds |
+
+**Data.** FineWeb-Edu `sample-10BT` stream, 1,024-token chunks (`routed_ouro.fineweb_chunks`). Chunks 0–63 are the
+evaluation split (repo convention, extended if the pilot says more are needed), 64–127 tuning, 128 onward training.
+Training and evaluation sizes come from the pilot.
+
+**Outcome.** For each arm, the held-out loss-vs-layers curve, with thresholds set **on the evaluation split** to hit
+each budget (label-free). **Primary:** the area under the curve, i.e. mean NLL over budgets 50–90 layers per token.
+Secondary: NLL at 50, 60, 70, 80 and 90. Comparisons are paired by token with chunk-bootstrap 95% CIs. A
+hindsight-oracle exit is reported as an upper bound only. **Charged comparison (secondary):** arms that need the
+full-vocabulary readout every round pay for it in layer-equivalents (Ouro's readout ≈ 2 layers if the vocabulary is
+~49k, to be measured), and attention-probability arms pay their measured overhead.
+
+**Smallest effect of interest:** the NLL worth 2 layers of compute, read off the `ouro-gate` curve's slope at 70
+layers on the tuning split. This anchors it in compute rather than in the hindsight oracle (E13: oracle gaps here
+are mostly selection). Frozen in `SPEC.md` after the pilot.
+
+### 4. Decision rule (proposed; frozen in `SPEC.md` after the pilot)
+
+All tests are on the primary AUC, paired, two-sided where a difference is claimed, TOST where equivalence is.
+- **Attention helps:** `attn+own` or `src+own` beats `own` by at least the SESOI (CI excluding 0) **and** beats its
+  twin (`layers+own`, respectively `src-perm+own`) by at least the SESOI; and `all` beats `hidden+own`. Holm across
+  the two attention arms. → carry that signal into the recurrent-depth project's joint-training test.
+- **Confidence helps:** `own` or `hidden+own` beats `hidden` by at least the SESOI, without the attention verdict. →
+  carry confidence features (and `kl-rule` as a zero-parameter candidate) forward.
+- **Hidden suffices:** `hidden+own` and `all` are equivalent to `hidden` within ± the SESOI (TOST). → default gate.
+- **Inconclusive:** anything else, reported as such. The evaluation size is set from pilot variance so that the
+  AUC CI half-width is at most half the SESOI.
+
+### 5. Limitations, fixed in advance
+
+- Ouro has 4 exit points, not 1,000. A signal that helps choose among 4 may not transfer to fine-grained halting.
+- Under Ouro's evaluation accounting every token computes every round. So `src` measures sources at the same round,
+  not at their own exit, as they would be when decoding with real early exits.
+- Ouro's representation was trained with its hidden-state gate over 7.7T tokens, which favours `hidden`. A gate
+  trained jointly with attention features could do better than one fitted to a frozen model (§1).
+- In a 1,000-step model a full-vocabulary readout every step costs about as much as the step itself, so `own` and
+  `kl-rule` would need a cheaper readout there.
+
+### 6. Red-team (2026-11-24)
+
+A fresh agent read only the first draft of this section and `structured_router.py`, `routed_ouro.py` and
+`ouro_model.py`. Nine findings, all accepted; the responses are folded into §1–§5.
+
+| # | Finding | Response |
+|---|---|---|
+| 1 | The attention arms also carried the token's own confidence, which a linear hidden-state gate cannot form, so "attention helps" could come from confidence alone. | Nested contrasts against the same arm without attention; `hidden+own` added; separate "confidence helps" verdict. |
+| 2 | Ouro (frozen, co-trained gate, 4 exits, all rounds computed) answers an easier question than the recurrent-depth decision; a null should not mean "use a hidden gate". | E15 reframed as a screen; a null means no evidence either way; the decision is made in the jointly trained model. |
+| 3 | Optimization unfair both ways: a cold 2,048-dim gate trained briefly on a shared LR grid; unstandardized hidden state; small arms with shared weights on heavy-tailed KL could underfit. | Cached features, train to convergence, per-arm weight/bias LR grids extended to interior, `hidden-warm` added, all standardized, logs of KL and norm ratios, per-round weights for small arms. |
+| 4 | "Hidden suffices" declared on a failure to reject; a SESOI from a selection-driven oracle; power unknown. | TOST for equivalence; SESOI anchored in 2 layers of compute; AUC as the single primary; evaluation size from pilot variance. |
+| 5 | Compute not matched: confidence features need a full-vocabulary readout each round; tuning-split thresholds drift on eval. | Charged comparison in layer-equivalents; budgets matched on the evaluation split by threshold (label-free). |
+| 6 | `src` included the token itself and the sink, so it was not cross-token. | Self and position 0 excluded, renormalized; `src-perm` sham. |
+| 7 | `attn` confounded attention with intermediate-layer information and position; `bias-only` could only hit 4 budgets. | `layers+own` twin; `pos` floor; `bias` as random per-token rounds. |
+| 8 | Leakage traps: target-aligned arrays in source values; an off-by-one mask; NaN at position 0. | Label- and future-token invariance tests; entropy normalization is 0 at position 0 (no division by zero; tested). |
+| 9 | `kl-rule` could never exit at round 1. | Round-1 entropy threshold added. |
+
+---
+
 ### Decisions
 
+- **2026-11-24** (Tyler: "Yes, test on Ouro"). E15 adopted: exit-gate inputs compared on Ouro-1.4B before the
+  recurrent-depth project chooses its halting signal. After red-team: E15 is a screen; nested contrasts against
+  confidence features, twins for intermediate layers and sources, cached features trained to convergence, TOST for
+  equivalence, AUC as the single primary, a compute-anchored SESOI.
 - **2026-11-22.** E14 adopted as the next experiment (Tyler: "Yes, write it up"). Staged: parity and known-mover gates
   → fair controls on NLL → MMLU gated on that → stopping rule only on a pass. Ouro dropped. Decision rests on the two
   Qwen models; E2B is generalization. Generation tasks out of scope.
