@@ -37,6 +37,13 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 - *Conclusion so far:* per-token compute routing pays off on benchmarks when the router is trained with the model, not when it is fitted to a frozen one. Stage 2 (`routed_ouro.py`) trains a per-layer skip/once/twice router jointly with LoRA, against a LoRA-only control.
 - *Stage 2 (artifacts in `results/ouro-1.4b/stage2/`):* router + LoRA r16, 1200 × 8 × 1024 FineWeb-Edu tokens, target 72 layers/token. Two Lagrangian runs collapsed to ~10–18 layers (all heads flip together); a two-sided quadratic penalty with an annealed target was stable. Final: 73.2 layers/token, 26.6% skips, 0.5% twice; held-out NLL 2.314 vs the LoRA control's 2.278 at 96. Benchmarks (acc_norm, paired): vs control at 3 rounds (72 layers), MMLU +9.2 [+6.2, +12.2] p < 1e-4, Winogrande +2.2 (p = 0.07), HellaSwag −1.2 (n.s.; acc −2.2, p = 0.001); vs control at 96 layers, MMLU −1.1 and Winogrande +0.1 (n.s.), ARC −2.3/−2.7 (p < 0.02). **But** the LoRA fine-tune itself cost MMLU (0.669 → 0.632 at 96 layers; 3-round exit 0.643 → 0.529), and the original Ouro with its own gate beats the router model on 4 of 5 tasks (MMLU 0.667 at 80 layers vs 0.621 at 76). Router-only on frozen Ouro (`--no_lora`, same recipe): 73.9 layers/token in training but 79–84 at eval (argmax vs Gumbel samples); held-out NLL 2.417. Paired vs original Ouro's gate:0.2 it is worse on 4 of 5 tasks while using more layers (acc_norm ARC-C −3.2, ARC-E −1.8, HellaSwag −3.1, MMLU −4.4, all p < 0.05; Winogrande +0.8 n.s.). Ouro's own exit gate remains the best per-token compute policy found on Ouro.
 
+## E15 What should an exit gate read? (pre-registered 2026-11-24, running)
+**Question.** On Ouro-1.4B (frozen, 4 exit rounds), do attention-derived signals (the token's attention pattern, or
+whether the tokens it reads from have settled) improve per-token exit decisions beyond the hidden state and beyond
+the token's own confidence, at matched compute? A screen for the halting signal of a planned recurrent-depth model.
+Design and red-team in [`DESIGN.md`](DESIGN.md); frozen plan in [`SPEC.md`](SPEC.md); code `exit_signals.py`,
+`e15_fit.py`; report `results/e15/REPORT.md` (written by the script).
+
 ## E14 Training-free damped looping under fair controls (designed 2026-11-22, not run)
 **Question.** Does running a mid-stack window as K damped sub-steps (TFLT, arXiv 2605.23872), uniformly for every
 token, lower held-out NLL by more than zero-compute changes to the same window (mean shift, norm change, update

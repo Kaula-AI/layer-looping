@@ -347,7 +347,7 @@ transformers falls back to a much slower reference implementation of the linear-
 
 ## E15: what should an exit gate read? Hidden state vs attention vs convergence, on Ouro-1.4B
 
-**Status (2026-11-24):** designed and red-teamed (§6); local pilot running. No GPU time spent. E14 stage A is still
+**Status (2026-11-24):** designed, red-teamed (§6), piloted, and pre-registered in `SPEC.md` (SHA-256 `5a0b7c9a8e44af21b04531806b0bad47c6ca80f4cc46429dd93aedd152b68271`, published by a public commit to Kaula-AI/layer-looping). Feature cache running on the Mac. No GPU time spent. E14 stage A is still
 awaiting Tyler's approval; E15 does not depend on it.
 
 ### 1. Decision
@@ -472,6 +472,10 @@ A fresh agent read only the first draft of this section and `structured_router.p
   recurrent-depth project chooses its halting signal. After red-team: E15 is a screen; nested contrasts against
   confidence features, twins for intermediate layers and sources, cached features trained to convergence, TOST for
   equivalence, AUC as the single primary, a compute-anchored SESOI.
+- **2026-11-24, pre-registration.** Pilot (16 tuning chunks): Ouro's gate 2.350 nats at 70 layers vs 2.342 for all 96
+  rounds; SESOI ≈ 0.0023. Evaluation split set to 128 chunks (0–63, 192–255) that the pilot never read; tuning 64–127;
+  training 256–743 (~500k tokens). Runs on this Mac (feature cache ~3 h at ~70 tok/s, ~13 GB). `SPEC.md` E15 frozen,
+  SHA-256 `5a0b7c9a8e44af21b04531806b0bad47c6ca80f4cc46429dd93aedd152b68271`.
 - **2026-11-22.** E14 adopted as the next experiment (Tyler: "Yes, write it up"). Staged: parity and known-mover gates
   → fair controls on NLL → MMLU gated on that → stopping rule only on a pass. Ouro dropped. Decision rests on the two
   Qwen models; E2B is generalization. Generation tasks out of scope.
