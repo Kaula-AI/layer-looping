@@ -347,7 +347,7 @@ transformers falls back to a much slower reference implementation of the linear-
 
 ## E15: what should an exit gate read? Hidden state vs attention vs convergence, on Ouro-1.4B
 
-**Status (2026-11-24):** designed, red-teamed (§6), piloted, and pre-registered in `SPEC.md` (SHA-256 `5a0b7c9a8e44af21b04531806b0bad47c6ca80f4cc46429dd93aedd152b68271`, published by a public commit to Kaula-AI/layer-looping). Feature cache running on the Mac. No GPU time spent. E14 stage A is still
+**Status (2026-11-24):** designed, red-teamed (§6), piloted, and pre-registered in `SPEC.md` (SHA-256 `5a0b7c9a8e44af21b04531806b0bad47c6ca80f4cc46429dd93aedd152b68271`, published by a public commit to Kaula-AI/layer-looping). Run the same day on the Mac: the script's verdict is "INCONCLUSIVE" (results in `EXPERIMENTS.md` → E15). No GPU time spent. E14 stage A is still
 awaiting Tyler's approval; E15 does not depend on it.
 
 ### 1. Decision
@@ -476,6 +476,11 @@ A fresh agent read only the first draft of this section and `structured_router.p
   rounds; SESOI ≈ 0.0023. Evaluation split set to 128 chunks (0–63, 192–255) that the pilot never read; tuning 64–127;
   training 256–743 (~500k tokens). Runs on this Mac (feature cache ~3 h at ~70 tok/s, ~13 GB). `SPEC.md` E15 frozen,
   SHA-256 `5a0b7c9a8e44af21b04531806b0bad47c6ca80f4cc46429dd93aedd152b68271`.
+- **2026-11-24, result.** Verdict INCONCLUSIVE, with no amendments to the spec. Attention adds nothing beyond the
+  token's own confidence, and confidence adds nothing to the hidden state. Every feature combined beats the hidden
+  state by 0.0027 nats, but loses once its compute is charged. Consequence for the recurrent-depth project: start
+  with the hidden-state gate. Attention-informed halting is not ruled out, since a jointly trained model could learn
+  to use it, but there is no evidence for it from a frozen model.
 - **2026-11-22.** E14 adopted as the next experiment (Tyler: "Yes, write it up"). Staged: parity and known-mover gates
   → fair controls on NLL → MMLU gated on that → stopping rule only on a pass. Ouro dropped. Decision rests on the two
   Qwen models; E2B is generalization. Generation tasks out of scope.

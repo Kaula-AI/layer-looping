@@ -37,12 +37,46 @@ Report 95% bootstrap CIs over held-out chunks for every headline number.
 - *Conclusion so far:* per-token compute routing pays off on benchmarks when the router is trained with the model, not when it is fitted to a frozen one. Stage 2 (`routed_ouro.py`) trains a per-layer skip/once/twice router jointly with LoRA, against a LoRA-only control.
 - *Stage 2 (artifacts in `results/ouro-1.4b/stage2/`):* router + LoRA r16, 1200 × 8 × 1024 FineWeb-Edu tokens, target 72 layers/token. Two Lagrangian runs collapsed to ~10–18 layers (all heads flip together); a two-sided quadratic penalty with an annealed target was stable. Final: 73.2 layers/token, 26.6% skips, 0.5% twice; held-out NLL 2.314 vs the LoRA control's 2.278 at 96. Benchmarks (acc_norm, paired): vs control at 3 rounds (72 layers), MMLU +9.2 [+6.2, +12.2] p < 1e-4, Winogrande +2.2 (p = 0.07), HellaSwag −1.2 (n.s.; acc −2.2, p = 0.001); vs control at 96 layers, MMLU −1.1 and Winogrande +0.1 (n.s.), ARC −2.3/−2.7 (p < 0.02). **But** the LoRA fine-tune itself cost MMLU (0.669 → 0.632 at 96 layers; 3-round exit 0.643 → 0.529), and the original Ouro with its own gate beats the router model on 4 of 5 tasks (MMLU 0.667 at 80 layers vs 0.621 at 76). Router-only on frozen Ouro (`--no_lora`, same recipe): 73.9 layers/token in training but 79–84 at eval (argmax vs Gumbel samples); held-out NLL 2.417. Paired vs original Ouro's gate:0.2 it is worse on 4 of 5 tasks while using more layers (acc_norm ARC-C −3.2, ARC-E −1.8, HellaSwag −3.1, MMLU −4.4, all p < 0.05; Winogrande +0.8 n.s.). Ouro's own exit gate remains the best per-token compute policy found on Ouro.
 
-## E15 What should an exit gate read? (pre-registered 2026-11-24, running)
+## E15 What should an exit gate read? (pre-registered and run 2026-11-24): INCONCLUSIVE
 **Question.** On Ouro-1.4B (frozen, 4 exit rounds), do attention-derived signals (the token's attention pattern, or
 whether the tokens it reads from have settled) improve per-token exit decisions beyond the hidden state and beyond
 the token's own confidence, at matched compute? A screen for the halting signal of a planned recurrent-depth model.
 Design and red-team in [`DESIGN.md`](DESIGN.md); frozen plan in [`SPEC.md`](SPEC.md); code `exit_signals.py`,
 `e15_fit.py`; report `results/e15/REPORT.md` (written by the script).
+**Result (run 2026-11-24, M1 Mac, bf16; `results/e15/`: `REPORT.md`, `results.json`, `fit_log.json`; feature cache not
+in git).** The script's verdict, quoted: **"Verdict: INCONCLUSIVE"**. Evaluation: 128 chunks, 130,944 tokens.
+SESOI 0.0017 nats/token. Contrasts are differences in mean NLL over budgets 50–90 layers (negative = first arm
+better), with 95% chunk-bootstrap CIs:
+
+| Contrast | Δ | 95% CI | Charged Δ |
+|---|---|---|---|
+| attn_own − own | −0.0005 | [−0.0015, +0.0005] | +0.0054 |
+| src_own − own | +0.0053 | [+0.0032, +0.0077] | +0.0136 |
+| src_own − srcperm_own (sham) | −0.0029 | [−0.0058, −0.0001] | −0.0049 |
+| own − hidden | +0.0041 | [+0.0034, +0.0050] | +0.0099 |
+| hidden_own − hidden | +0.0011 | [+0.0006, +0.0016] | +0.0117 |
+| all − hidden | −0.0027 | [−0.0030, −0.0024] | +0.0054 |
+| hidden − ouro_gate | +0.0001 | [−0.0004, +0.0006] | +0.0001 |
+| hidden − bias (static mix) | −0.0968 | [−0.1083, −0.0863] | — |
+
+- **No attention verdict.** Neither attention arm improves on the token's own confidence features: `attn_own`
+  ≈ `own`, and `src_own` is worse. Source settledness does beat its sham, but not `own`.
+- **No confidence verdict.** Confidence features alone are worse than the hidden state, and adding them to it changes
+  nothing beyond the SESOI.
+- **Not "hidden suffices" either.** `all` beats `hidden` by 0.0027 (about 1.6× the SESOI, roughly 3 layers' worth),
+  and that falls outside the equivalence band. The pre-registered nested contrasts do not attribute this gain to
+  attention. Charged for its features' compute, `all` is **worse** than `hidden` (+0.0054).
+- Retraining a hidden-state gate from scratch reproduces Ouro's gate (+0.0001), as in Finding 6. The gate's per-token
+  information is worth about 0.1 nats against a static mix of exit rounds.
+- Grid edges: `own` stayed on the edge of its learning-rate grids after two extensions (weights 0.27, biases 0.1), so
+  `own` may be under-tuned. All other arms ended inside their grids.
+- *Exploratory (not in the spec):*
+  - The zero-parameter rule is far worse overall (+0.082) because its round-1 entropy exits are poor. At 80 and 85
+    layers it matches or slightly beats Ouro's gate (2.3559 vs 2.3590; 2.3547 vs 2.3580).
+  - The hindsight oracle (2.18 at 70 layers vs 2.37 for the gates) is an upper bound only.
+
+**Read-out.** Per the spec, INCONCLUSIVE means no evidence either way. The recurrent-depth project keeps the default
+hidden-state gate. On a frozen Ouro, no attention or confidence signal earns its compute.
 
 ## E14 Training-free damped looping under fair controls (designed 2026-11-22, not run)
 **Question.** Does running a mid-stack window as K damped sub-steps (TFLT, arXiv 2605.23872), uniformly for every

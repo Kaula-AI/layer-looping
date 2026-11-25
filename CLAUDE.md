@@ -129,8 +129,9 @@ E14 (training-free damped looping, arXiv 2605.23872, under fair controls) design
 local pilot done the same day (`loop_wrap.py`, `e14.py`, `e14_pilot.py`): TFLT's config raises NLL on
 Qwen3-1.7B-Base. Decision models since 2026-11-23: Qwen3-4B-Base and Qwen3.5-4B-Base (hybrid Gated DeltaNet).
 GPU stage A awaits Tyler. Ouro is not in E14.
-E15 (what an exit gate should read, on Ouro-1.4B: hidden state vs confidence vs attention) pre-registered
-2026-11-24 in `SPEC.md`; runs locally (`exit_signals.py`, `e15_fit.py`).
+E15 (what an exit gate should read, on Ouro-1.4B: hidden state vs confidence vs attention) pre-registered and
+run 2026-11-24 (`SPEC.md`, `exit_signals.py`, `e15_fit.py`): INCONCLUSIVE; no signal beats the hidden-state gate
+once its compute is charged. See `EXPERIMENTS.md` → E15.
 
 ## Tasks, in order
 Follow `EXPERIMENTS.md`. Concretely:
