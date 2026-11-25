@@ -1,0 +1,184 @@
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 75.88it/s]
+  hidden: epoch 1 (63s), 54 of 54 gates still improving
+  hidden: epoch 2 (126s), 54 of 54 gates still improving
+  hidden: epoch 3 (186s), 54 of 54 gates still improving
+  hidden: epoch 4 (260s), 54 of 54 gates still improving
+  hidden: epoch 5 (365s), 54 of 54 gates still improving
+  hidden: epoch 6 (448s), 54 of 54 gates still improving
+  hidden: epoch 7 (538s), 53 of 54 gates still improving
+  hidden: epoch 8 (617s), 51 of 54 gates still improving
+  hidden: selected (lr_w 0.001, lr_b 0.1) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03] / [0.001, 0.01, 0.1, 1.0]
+  hidden: epoch 1 (74s), 18 of 18 gates still improving
+  hidden: epoch 2 (142s), 18 of 18 gates still improving
+  hidden: epoch 3 (200s), 15 of 18 gates still improving
+  hidden: epoch 4 (263s), 15 of 18 gates still improving
+  hidden: epoch 5 (322s), 15 of 18 gates still improving
+  hidden: epoch 6 (384s), 15 of 18 gates still improving
+  hidden: epoch 7 (450s), 14 of 18 gates still improving
+  hidden: epoch 8 (515s), 14 of 18 gates still improving
+hidden: selected {'lr_w': 0.001, 'lr_b': 0.1, 'price': 0.002, 'tuning_auc': 2.372242556677924, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03], 'grid_b': [0.001, 0.01, 0.1, 1.0], 'extensions': 1, 'on_edge_after_extensions': False}
+/Users/tylergee/Documents/kaula-ai/layer-looping/e15_fit.py:152: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /Users/runner/work/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:821.)
+  self.b[:] = float(ouro_gate.bias)
+  hidden_warm: epoch 1 (65s), 45 of 45 gates still improving
+  hidden_warm: epoch 2 (174s), 45 of 45 gates still improving
+  hidden_warm: epoch 3 (261s), 45 of 45 gates still improving
+  hidden_warm: epoch 4 (360s), 45 of 45 gates still improving
+  hidden_warm: epoch 5 (446s), 45 of 45 gates still improving
+  hidden_warm: epoch 6 (517s), 45 of 45 gates still improving
+  hidden_warm: epoch 7 (586s), 45 of 45 gates still improving
+  hidden_warm: epoch 8 (666s), 43 of 45 gates still improving
+  hidden_warm: selected (lr_w 1e-06, lr_b 0.001) on a grid edge; grids now [3.333333333333333e-07, 1e-06, 3e-06, 1e-05, 3e-05, 0.0001] / [0.0001, 0.001, 0.01, 0.1]
+  hidden_warm: epoch 1 (127s), 27 of 27 gates still improving
+  hidden_warm: epoch 2 (220s), 27 of 27 gates still improving
+  hidden_warm: epoch 3 (283s), 27 of 27 gates still improving
+  hidden_warm: epoch 4 (343s), 26 of 27 gates still improving
+  hidden_warm: epoch 5 (399s), 26 of 27 gates still improving
+  hidden_warm: epoch 6 (458s), 26 of 27 gates still improving
+  hidden_warm: epoch 7 (512s), 25 of 27 gates still improving
+  hidden_warm: epoch 8 (569s), 25 of 27 gates still improving
+hidden_warm: selected {'lr_w': 1e-06, 'lr_b': 0.001, 'price': 0.002, 'tuning_auc': 2.372780031628079, 'grid_w': [3.333333333333333e-07, 1e-06, 3e-06, 1e-05, 3e-05, 0.0001], 'grid_b': [0.0001, 0.001, 0.01, 0.1], 'extensions': 1, 'on_edge_after_extensions': False}
+  own: epoch 1 (3s), 54 of 54 gates still improving
+  own: epoch 2 (6s), 54 of 54 gates still improving
+  own: epoch 3 (10s), 54 of 54 gates still improving
+  own: epoch 4 (13s), 54 of 54 gates still improving
+  own: epoch 5 (16s), 54 of 54 gates still improving
+  own: epoch 6 (19s), 54 of 54 gates still improving
+  own: epoch 7 (22s), 54 of 54 gates still improving
+  own: epoch 8 (25s), 54 of 54 gates still improving
+  own: selected (lr_w 0.03, lr_b 0.001) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09] / [0.0001, 0.001, 0.01, 0.1]
+  own: epoch 1 (2s), 30 of 30 gates still improving
+  own: epoch 2 (4s), 30 of 30 gates still improving
+  own: epoch 3 (6s), 30 of 30 gates still improving
+  own: epoch 4 (8s), 30 of 30 gates still improving
+  own: epoch 5 (10s), 30 of 30 gates still improving
+  own: epoch 6 (12s), 30 of 30 gates still improving
+  own: epoch 7 (14s), 30 of 30 gates still improving
+  own: epoch 8 (16s), 30 of 30 gates still improving
+  own: selected (lr_w 0.09, lr_b 0.1) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09, 0.27] / [0.0001, 0.001, 0.01, 0.1, 1.0]
+  own: epoch 1 (2s), 36 of 36 gates still improving
+  own: epoch 2 (5s), 36 of 36 gates still improving
+  own: epoch 3 (7s), 31 of 36 gates still improving
+  own: epoch 4 (9s), 30 of 36 gates still improving
+  own: epoch 5 (11s), 30 of 36 gates still improving
+  own: epoch 6 (14s), 30 of 36 gates still improving
+  own: epoch 7 (16s), 29 of 36 gates still improving
+  own: epoch 8 (18s), 29 of 36 gates still improving
+own: selected {'lr_w': 0.27, 'lr_b': 0.1, 'price': 0.002, 'tuning_auc': 2.375351826349894, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09, 0.27], 'grid_b': [0.0001, 0.001, 0.01, 0.1, 1.0], 'extensions': 2, 'on_edge_after_extensions': True}
+  hidden_own: epoch 1 (59s), 54 of 54 gates still improving
+  hidden_own: epoch 2 (125s), 54 of 54 gates still improving
+  hidden_own: epoch 3 (187s), 54 of 54 gates still improving
+  hidden_own: epoch 4 (251s), 54 of 54 gates still improving
+  hidden_own: epoch 5 (313s), 54 of 54 gates still improving
+  hidden_own: epoch 6 (382s), 54 of 54 gates still improving
+  hidden_own: epoch 7 (452s), 53 of 54 gates still improving
+  hidden_own: epoch 8 (517s), 51 of 54 gates still improving
+hidden_own: selected {'lr_w': 0.003, 'lr_b': 0.01, 'price': 0.002, 'tuning_auc': 2.3721092277103, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03], 'grid_b': [0.001, 0.01, 0.1], 'extensions': 0, 'on_edge_after_extensions': False}
+  attn_own: epoch 1 (7s), 54 of 54 gates still improving
+  attn_own: epoch 2 (12s), 54 of 54 gates still improving
+  attn_own: epoch 3 (17s), 54 of 54 gates still improving
+  attn_own: epoch 4 (22s), 54 of 54 gates still improving
+  attn_own: epoch 5 (27s), 54 of 54 gates still improving
+  attn_own: epoch 6 (32s), 54 of 54 gates still improving
+  attn_own: epoch 7 (38s), 54 of 54 gates still improving
+  attn_own: epoch 8 (43s), 54 of 54 gates still improving
+  attn_own: selected (lr_w 0.03, lr_b 0.01) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09] / [0.001, 0.01, 0.1]
+  attn_own: epoch 1 (3s), 9 of 9 gates still improving
+  attn_own: epoch 2 (6s), 9 of 9 gates still improving
+  attn_own: epoch 3 (9s), 9 of 9 gates still improving
+  attn_own: epoch 4 (12s), 9 of 9 gates still improving
+  attn_own: epoch 5 (15s), 7 of 9 gates still improving
+  attn_own: epoch 6 (18s), 7 of 9 gates still improving
+  attn_own: epoch 7 (21s), 7 of 9 gates still improving
+  attn_own: epoch 8 (24s), 7 of 9 gates still improving
+attn_own: selected {'lr_w': 0.03, 'lr_b': 0.01, 'price': 0.002, 'tuning_auc': 2.3745172023773193, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09], 'grid_b': [0.001, 0.01, 0.1], 'extensions': 1, 'on_edge_after_extensions': False}
+  layers_own: epoch 1 (8s), 54 of 54 gates still improving
+  layers_own: epoch 2 (13s), 54 of 54 gates still improving
+  layers_own: epoch 3 (19s), 54 of 54 gates still improving
+  layers_own: epoch 4 (24s), 54 of 54 gates still improving
+  layers_own: epoch 5 (30s), 54 of 54 gates still improving
+  layers_own: epoch 6 (35s), 54 of 54 gates still improving
+  layers_own: epoch 7 (41s), 54 of 54 gates still improving
+  layers_own: epoch 8 (46s), 54 of 54 gates still improving
+  layers_own: selected (lr_w 0.03, lr_b 0.001) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09] / [0.0001, 0.001, 0.01, 0.1]
+  layers_own: epoch 1 (5s), 30 of 30 gates still improving
+  layers_own: epoch 2 (9s), 30 of 30 gates still improving
+  layers_own: epoch 3 (14s), 30 of 30 gates still improving
+  layers_own: epoch 4 (18s), 30 of 30 gates still improving
+  layers_own: epoch 5 (23s), 30 of 30 gates still improving
+  layers_own: epoch 6 (27s), 30 of 30 gates still improving
+  layers_own: epoch 7 (32s), 27 of 30 gates still improving
+  layers_own: epoch 8 (36s), 23 of 30 gates still improving
+  layers_own: selected (lr_w 0.03, lr_b 0.0001) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09] / [1e-05, 0.0001, 0.001, 0.01, 0.1]
+  layers_own: epoch 1 (4s), 21 of 21 gates still improving
+  layers_own: epoch 2 (8s), 21 of 21 gates still improving
+  layers_own: epoch 3 (12s), 21 of 21 gates still improving
+  layers_own: epoch 4 (16s), 21 of 21 gates still improving
+  layers_own: epoch 5 (21s), 21 of 21 gates still improving
+  layers_own: epoch 6 (25s), 21 of 21 gates still improving
+  layers_own: epoch 7 (29s), 20 of 21 gates still improving
+  layers_own: epoch 8 (33s), 20 of 21 gates still improving
+layers_own: selected {'lr_w': 0.03, 'lr_b': 0.0001, 'price': 0.002, 'tuning_auc': 2.3768087493048773, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09], 'grid_b': [1e-05, 0.0001, 0.001, 0.01, 0.1], 'extensions': 2, 'on_edge_after_extensions': False}
+  src_own: epoch 1 (3s), 54 of 54 gates still improving
+  src_own: epoch 2 (7s), 54 of 54 gates still improving
+  src_own: epoch 3 (11s), 54 of 54 gates still improving
+  src_own: epoch 4 (15s), 54 of 54 gates still improving
+  src_own: epoch 5 (19s), 54 of 54 gates still improving
+  src_own: epoch 6 (23s), 54 of 54 gates still improving
+  src_own: epoch 7 (27s), 54 of 54 gates still improving
+  src_own: epoch 8 (30s), 54 of 54 gates still improving
+  src_own: selected (lr_w 0.03, lr_b 0.01) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09] / [0.001, 0.01, 0.1]
+  src_own: epoch 1 (2s), 9 of 9 gates still improving
+  src_own: epoch 2 (4s), 9 of 9 gates still improving
+  src_own: epoch 3 (6s), 9 of 9 gates still improving
+  src_own: epoch 4 (7s), 9 of 9 gates still improving
+  src_own: epoch 5 (9s), 9 of 9 gates still improving
+  src_own: epoch 6 (11s), 9 of 9 gates still improving
+  src_own: epoch 7 (13s), 9 of 9 gates still improving
+  src_own: epoch 8 (15s), 8 of 9 gates still improving
+src_own: selected {'lr_w': 0.03, 'lr_b': 0.01, 'price': 0.0005, 'tuning_auc': 2.3777892324659557, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09], 'grid_b': [0.001, 0.01, 0.1], 'extensions': 1, 'on_edge_after_extensions': False}
+  srcperm_own: epoch 1 (5s), 54 of 54 gates still improving
+  srcperm_own: epoch 2 (8s), 54 of 54 gates still improving
+  srcperm_own: epoch 3 (12s), 54 of 54 gates still improving
+  srcperm_own: epoch 4 (16s), 54 of 54 gates still improving
+  srcperm_own: epoch 5 (20s), 54 of 54 gates still improving
+  srcperm_own: epoch 6 (24s), 54 of 54 gates still improving
+  srcperm_own: epoch 7 (28s), 54 of 54 gates still improving
+  srcperm_own: epoch 8 (32s), 54 of 54 gates still improving
+  srcperm_own: selected (lr_w 0.03, lr_b 0.01) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09] / [0.001, 0.01, 0.1]
+  srcperm_own: epoch 1 (2s), 9 of 9 gates still improving
+  srcperm_own: epoch 2 (4s), 9 of 9 gates still improving
+  srcperm_own: epoch 3 (5s), 9 of 9 gates still improving
+  srcperm_own: epoch 4 (7s), 9 of 9 gates still improving
+  srcperm_own: epoch 5 (9s), 9 of 9 gates still improving
+  srcperm_own: epoch 6 (11s), 9 of 9 gates still improving
+  srcperm_own: epoch 7 (13s), 9 of 9 gates still improving
+  srcperm_own: epoch 8 (15s), 9 of 9 gates still improving
+srcperm_own: selected {'lr_w': 0.03, 'lr_b': 0.01, 'price': 0.002, 'tuning_auc': 2.3815596633487277, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.09], 'grid_b': [0.001, 0.01, 0.1], 'extensions': 1, 'on_edge_after_extensions': False}
+  all: epoch 1 (67s), 54 of 54 gates still improving
+  all: epoch 2 (141s), 54 of 54 gates still improving
+  all: epoch 3 (206s), 54 of 54 gates still improving
+  all: epoch 4 (284s), 54 of 54 gates still improving
+  all: epoch 5 (364s), 54 of 54 gates still improving
+  all: epoch 6 (439s), 54 of 54 gates still improving
+  all: epoch 7 (518s), 54 of 54 gates still improving
+  all: epoch 8 (599s), 51 of 54 gates still improving
+all: selected {'lr_w': 0.001, 'lr_b': 0.01, 'price': 0.002, 'tuning_auc': 2.369868040084839, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03], 'grid_b': [0.001, 0.01, 0.1], 'extensions': 0, 'on_edge_after_extensions': False}
+  pos: epoch 1 (3s), 54 of 54 gates still improving
+  pos: epoch 2 (7s), 54 of 54 gates still improving
+  pos: epoch 3 (11s), 54 of 54 gates still improving
+  pos: epoch 4 (14s), 54 of 54 gates still improving
+  pos: epoch 5 (17s), 54 of 54 gates still improving
+  pos: epoch 6 (20s), 54 of 54 gates still improving
+  pos: epoch 7 (22s), 54 of 54 gates still improving
+  pos: epoch 8 (26s), 54 of 54 gates still improving
+  pos: selected (lr_w 0.003, lr_b 0.001) on a grid edge; grids now [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03] / [0.0001, 0.001, 0.01, 0.1]
+  pos: epoch 1 (2s), 18 of 18 gates still improving
+  pos: epoch 2 (3s), 18 of 18 gates still improving
+  pos: epoch 3 (5s), 18 of 18 gates still improving
+  pos: epoch 4 (7s), 18 of 18 gates still improving
+  pos: epoch 5 (8s), 18 of 18 gates still improving
+  pos: epoch 6 (10s), 18 of 18 gates still improving
+  pos: epoch 7 (11s), 18 of 18 gates still improving
+  pos: epoch 8 (13s), 18 of 18 gates still improving
+pos: selected {'lr_w': 0.003, 'lr_b': 0.001, 'price': 0.002, 'tuning_auc': 2.4430544641282825, 'grid_w': [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03], 'grid_b': [0.0001, 0.001, 0.01, 0.1], 'extensions': 1, 'on_edge_after_extensions': False}
